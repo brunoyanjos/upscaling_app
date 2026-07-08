@@ -1,0 +1,22 @@
+[project]
+name = "upscaling-app"
+version = "0.1.0"
+description = "Local Python application for experimental data organisation, upscaling analysis, distribution fitting, and result export."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas",
+    "openpyxl",
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "sqlalchemy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

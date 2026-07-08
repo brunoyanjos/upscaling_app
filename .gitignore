@@ -1,0 +1,72 @@
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+
+# Test and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Type checking / linting cache
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment variables and local config
+.env
+.env.*
+*.local
+
+# IDE / editor
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Project data - raw and generated data should not be versioned by default
+data/raw/*
+data/processed/*
+data/database/*
+data/exports/*
+data/figures/*
+
+# Keep folder structure
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/database/.gitkeep
+!data/exports/.gitkeep
+!data/figures/.gitkeep
+
+# SQLite databases
+*.sqlite
+*.sqlite3
+*.db
+
+# Excel temporary files
+~$*.xlsx
+~$*.xlsm
+~$*.xls
+
+# Logs
+*.log
+logs/
+
+# Local scratch files
+scratch/
+tmp/
+temp/
