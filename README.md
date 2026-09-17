@@ -1,55 +1,118 @@
 # Upscaling App
 
-Local Python project for organising experimental data, storing standardised records in a local database, running upscaling analyses, fitting droplet-size distributions, and exporting reproducible results.
+Scientific Python application for the analysis and modelling of oil dispersion experiments.
 
-## Initial scope
+The project currently focuses on:
 
-The first version focuses on:
+- SSDI modelling;
+- SSMD modelling;
+- droplet-size distribution analysis;
+- parameter estimation using JAX;
+- statistical analysis and model validation.
 
-- reading existing Excel spreadsheets;
-- standardising experimental data;
-- converting physical quantities to SI units;
-- preserving source traceability;
-- storing data in a local SQLite database;
-- running basic statistical and upscaling analyses.
-
-The graphical interface is not part of the first development stage.
-
-## Data policy
-
-The project stores canonical physical data in SI units. Derived quantities such as Reynolds number, Weber number, velocity, and non-dimensional droplet diameters are computed by the application.
-
-See:
+## Project structure
 
 ```text
-docs/DATA_POLICY.md
+upscaling_app/
+├── configs/
+├── data/
+│   ├── raw/
+│   └── database/
+├── docs/
+├── src/
+│   └── upscaling_app/
+│       ├── analysis/
+│       ├── database/
+│       ├── models/
+│       ├── upscaling/
+│       ├── cli.py
+│       └── paths.py
+├── pyproject.toml
+└── README.md
 ```
 
-## Repository structure
+## Installation
+
+Install the project in editable mode:
+
+```bash
+pip install -e .
+```
+
+## Command-line interface
+
+The application is executed through:
+
+```bash
+upscaling
+```
+
+Available workflows will include:
+
+```bash
+upscaling database build
+upscaling ssdi --config <config.toml>
+upscaling ssmd --config <config.toml>
+upscaling distribution --config <config.toml>
+upscaling analyze --config <config.toml>
+```
+
+## Database architecture
+
+Raw experimental data are converted into normalized databases:
 
 ```text
-data/raw/        Raw source files, not versioned
-data/processed/  Intermediate processed files, not versioned
-data/database/   Local SQLite databases, not versioned
-data/reference/  Versioned reference data
-data/exports/    Generated exported results, not versioned
-data/figures/    Generated figures, not versioned
-docs/            Project documentation
-tests/           Tests for critical functions
+oil_properties
+      1
+      │
+      N
+experiments
+      1
+      │
+      N
+distributions
 ```
 
-## Development setup
+The current databases are:
 
-Create and activate the virtual environment:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
+```text
+data/database/
+├── oil_properties.xlsx
+├── experiments.xlsx
+└── distributions.xlsx
 ```
 
-Install the project in editable mode with development dependencies:
+`experiment_id` provides the link between experimental conditions and droplet-size distributions.
 
-```bash
-python -m pip install --upgrade pip
-pip install -e ".[dev]"
-```
+Experimental identifiers are deterministic so that database reconstruction preserves relationships between datasets.
+
+## Units
+
+Processed databases use SI units whenever applicable.
+
+Examples:
+
+- density: kg/m³
+- viscosity: Pa·s
+- diameter: m
+- volumetric flow rate: m³/s
+- interfacial tension: N/m
+- fractions: dimensionless
+
+## Current development status
+
+### Milestone 1 — Data architecture and CLI foundation
+
+Current work includes:
+
+- Python package structure using `src/`;
+- command-line interface;
+- normalization of raw SINTEF data;
+- oil-property database;
+- experiment database;
+- droplet-size distribution database;
+- deterministic relationships between experimental data.
+
+### Next milestone
+
+Milestone 2 will reconstruct the SSDI modelling pipeline using the new database architecture.

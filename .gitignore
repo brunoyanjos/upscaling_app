@@ -39,6 +39,7 @@ htmlcov/
 Thumbs.db
 
 # Project data - raw and generated data should not be versioned by default
+data/*
 data/raw/*
 data/processed/*
 data/database/*
