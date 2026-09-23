@@ -5,6 +5,7 @@ from upscaling_app.database.utils.experiment_id import make_experiment_id
 from upscaling_app.database.utils.tags import (
     dispersion_kind,
     normalize_distribution_tag,
+    water_jet_fraction,
 )
 
 
@@ -55,7 +56,20 @@ def build_experiments() -> pd.DataFrame:
     records = []
 
     for sheet_name in sheets:
-        df = pd.read_excel(file_path, sheet_name=sheet_name, header=10)
+        raw = pd.read_excel(
+            file_path,
+            sheet_name=sheet_name,
+            header=None,
+        )
+
+        water_nozzle_diameter = float(raw.iloc[6, 3]) * 1e-3
+
+        df = pd.read_excel(
+            file_path,
+            sheet_name=sheet_name,
+            header=10,
+        )
+
         df = df.iloc[:60]
 
         reference_oil = None
@@ -65,6 +79,13 @@ def build_experiments() -> pd.DataFrame:
 
             if "Untreated" in tag:
                 reference_oil = int(tag.split("-")[0])
+
+            fraction = water_jet_fraction(tag)
+
+            oil_flow = float(row.iloc[6]) / 60000
+            gas_flow = float(row.iloc[7]) / 60000
+
+            water_flow = oil_flow * fraction
 
             records.append(
                 {
@@ -77,10 +98,15 @@ def build_experiments() -> pd.DataFrame:
                     "dispersion_kind": dispersion_kind(tag),
                     "dispersion_tag": tag,
                     "nozzle_diameter": float(row.iloc[5]),
-                    "has_gas": float(row.iloc[7]) > 0.0,
+                    "has_gas": gas_flow > 0.0,
                     "ift": float(row.iloc[4]) * 1e-3,
-                    "oil_flow": float(row.iloc[6]) / 60000,
-                    "gas_flow": float(row.iloc[7]) / 60000,
+                    "oil_flow": oil_flow,
+                    "gas_flow": gas_flow,
+                    "water_jet_fraction": fraction,
+                    "water_flow": water_flow,
+                    "water_nozzle_diameter": (
+                        water_nozzle_diameter if fraction > 0.0 else float("nan")
+                    ),
                     "oil_viscosity": float(row.iloc[12]) * 1e-3,
                     "gas_density": float(row.iloc[14]),
                     "oil_density": float(row.iloc[15]) * 1e3,

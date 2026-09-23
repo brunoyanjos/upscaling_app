@@ -16,7 +16,9 @@ def create_parser() -> argparse.ArgumentParser:
         required=True,
     )
 
+    # =========================================================
     # Database
+    # =========================================================
 
     database_parser = subparsers.add_parser(
         "database",
@@ -33,7 +35,9 @@ def create_parser() -> argparse.ArgumentParser:
         help="Build databases from raw data.",
     )
 
+    # =========================================================
     # SSDI
+    # =========================================================
 
     ssdi_parser = subparsers.add_parser(
         "ssdi",
@@ -59,19 +63,27 @@ def create_parser() -> argparse.ArgumentParser:
         help="Run SSDI sensitivity analysis excluding oils 3016 and 4665.",
     )
 
+    # =========================================================
     # SSMD
+    # =========================================================
 
     ssmd_parser = subparsers.add_parser(
         "ssmd",
+        help="Run SSMD modelling workflows.",
     )
 
-    ssmd_parser.add_argument(
-        "--config",
-        type=Path,
-        required=True,
+    ssmd_subparsers = ssmd_parser.add_subparsers(
+        dest="ssmd_command",
     )
 
+    ssmd_subparsers.add_parser(
+        "baseline",
+        help="Run the baseline SSMD workflow.",
+    )
+
+    # =========================================================
     # Distribution
+    # =========================================================
 
     distribution_parser = subparsers.add_parser(
         "distribution",
@@ -83,7 +95,9 @@ def create_parser() -> argparse.ArgumentParser:
         required=True,
     )
 
+    # =========================================================
     # Analysis
+    # =========================================================
 
     analysis_parser = subparsers.add_parser(
         "analyze",
@@ -94,6 +108,10 @@ def create_parser() -> argparse.ArgumentParser:
         dest="analysis_command",
         required=True,
     )
+
+    # ---------------------------------------------------------
+    # SSDI analysis
+    # ---------------------------------------------------------
 
     ssdi_analysis_parser = analysis_subparsers.add_parser(
         "ssdi",
@@ -126,6 +144,55 @@ def create_parser() -> argparse.ArgumentParser:
         help="Run leave-one-oil-out validation.",
     )
 
+    # ---------------------------------------------------------
+    # SSMD analysis
+    # ---------------------------------------------------------
+
+    ssmd_analysis_parser = analysis_subparsers.add_parser(
+        "ssmd",
+        help="Analyze SSMD model results.",
+    )
+
+    ssmd_analysis_parser.add_argument(
+        "--loo",
+        action="store_true",
+        help="Run leave-one-oil-out validation.",
+    )
+
+    # ---------------------------------------------------------
+    # Experimental analysis
+    # ---------------------------------------------------------
+
+    experimental_analysis_parser = analysis_subparsers.add_parser(
+        "experimental",
+        help="Analyze experimental data.",
+    )
+
+    experimental_subparsers = experimental_analysis_parser.add_subparsers(
+        dest="experimental_command",
+        required=True,
+    )
+
+    experimental_subparsers.add_parser(
+        "descriptive",
+        help="Run descriptive experimental analysis.",
+    )
+
+    experimental_subparsers.add_parser(
+        "ssdi",
+        help="Analyze SSDI experimental relationships.",
+    )
+
+    experimental_subparsers.add_parser(
+        "ssmd",
+        help="Analyze SSMD experimental relationships.",
+    )
+
+    experimental_subparsers.add_parser(
+        "treatment-effect",
+        help="Analyze measured d50 reduction relative to untreated conditions.",
+    )
+
     return parser
 
 
@@ -133,12 +200,18 @@ def main() -> None:
     parser = create_parser()
     args = parser.parse_args()
 
+    # =========================================================
+    # Runtime configuration
+    # =========================================================
+
     if args.command == "ssdi" or (
         args.command == "analyze" and args.analysis_command == "ssdi"
     ):
         os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
+    # =========================================================
     # Database
+    # =========================================================
 
     if args.command == "database":
         if args.database_command == "build":
@@ -146,43 +219,41 @@ def main() -> None:
 
             build_database()
 
+    # =========================================================
     # SSDI
+    # =========================================================
 
     elif args.command == "ssdi":
         if args.ssdi_command in (None, "baseline"):
-            from upscaling_app.upscaling.ssdi.baseline import (
-                run_baseline,
-            )
             from upscaling_app.upscaling.ssdi.reporting import (
                 print_baseline_report,
+            )
+            from upscaling_app.upscaling.ssdi.workflows.baseline import (
+                run_baseline,
             )
 
             result = run_baseline()
 
-            print_baseline_report(
-                result,
-            )
+            print_baseline_report(result)
 
         elif args.ssdi_command == "filtered":
-            from upscaling_app.upscaling.ssdi.filtered import (
-                run_filtered,
-            )
             from upscaling_app.upscaling.ssdi.reporting import (
                 print_filtered_report,
+            )
+            from upscaling_app.upscaling.ssdi.workflows.filtered import (
+                run_filtered,
             )
 
             result = run_filtered()
 
-            print_filtered_report(
-                result,
-            )
+            print_filtered_report(result)
 
         elif args.ssdi_command == "oil-sensitivity":
-            from upscaling_app.upscaling.ssdi.oil_sensitivity import (
-                run_oil_sensitivity,
-            )
             from upscaling_app.upscaling.ssdi.reporting import (
                 print_model_report,
+            )
+            from upscaling_app.upscaling.ssdi.workflows.oil_sensitivity import (
+                run_oil_sensitivity,
             )
 
             result = run_oil_sensitivity()
@@ -192,21 +263,45 @@ def main() -> None:
                 title="SSDI OIL SENSITIVITY CALIBRATION",
             )
 
+    # =========================================================
+    # SSMD
+    # =========================================================
+
+    elif args.command == "ssmd":
+        if args.ssmd_command in (None, "baseline"):
+            from upscaling_app.upscaling.ssmd.reporting import (
+                print_baseline_report,
+            )
+            from upscaling_app.upscaling.ssmd.workflows.baseline import (
+                run_baseline,
+            )
+
+            result = run_baseline()
+
+            print_baseline_report(result)
+
+    # =========================================================
     # Analysis
+    # =========================================================
 
     elif args.command == "analyze":
+
+        # -----------------------------------------------------
+        # SSDI analysis
+        # -----------------------------------------------------
+
         if args.analysis_command == "ssdi":
 
             # Leave-one-oil-out validation
 
             if args.loo:
-                from upscaling_app.analysis.ssdi.comparison import (
+                from upscaling_app.analysis.ssdi.evaluation.comparison import (
                     build_evaluation_comparison,
                 )
-                from upscaling_app.analysis.ssdi.leave_one_oil_out import (
+                from upscaling_app.analysis.ssdi.evaluation.leave_one_oil_out import (
                     run_leave_one_oil_out,
                 )
-                from upscaling_app.analysis.ssdi.persistence import (
+                from upscaling_app.analysis.ssdi.io.persistence import (
                     save_evaluation_comparison,
                     save_leave_one_oil_out,
                 )
@@ -222,47 +317,28 @@ def main() -> None:
 
                 result = run_leave_one_oil_out()
 
-                save_leave_one_oil_out(
-                    result,
-                )
+                save_leave_one_oil_out(result)
 
-                save_leave_one_oil_out_plot(
-                    result.folds,
-                )
+                save_leave_one_oil_out_plot(result.folds)
+                save_leave_one_oil_out_mape_plot(result.folds)
+                save_leave_one_oil_out_bias_plot(result.folds)
 
-                save_leave_one_oil_out_mape_plot(
-                    result.folds,
-                )
+                comparison = build_evaluation_comparison(result)
 
-                save_leave_one_oil_out_bias_plot(
-                    result.folds,
-                )
+                save_evaluation_comparison(comparison)
 
-                comparison = build_evaluation_comparison(
-                    result,
-                )
-
-                save_evaluation_comparison(
-                    comparison,
-                )
-
-                print_leave_one_oil_out_report(
-                    result,
-                )
-
-                print_evaluation_comparison(
-                    comparison,
-                )
+                print_leave_one_oil_out_report(result)
+                print_evaluation_comparison(comparison)
 
                 return
 
             # Model comparison
 
             if args.compare:
-                from upscaling_app.analysis.ssdi.comparison import (
+                from upscaling_app.analysis.ssdi.evaluation.comparison import (
                     build_model_comparison,
                 )
-                from upscaling_app.analysis.ssdi.persistence import (
+                from upscaling_app.analysis.ssdi.io.persistence import (
                     save_model_comparison,
                 )
                 from upscaling_app.analysis.ssdi.reporting import (
@@ -271,13 +347,8 @@ def main() -> None:
 
                 comparison = build_model_comparison()
 
-                save_model_comparison(
-                    comparison,
-                )
-
-                print_model_comparison(
-                    comparison,
-                )
+                save_model_comparison(comparison)
+                print_model_comparison(comparison)
 
                 return
 
@@ -304,7 +375,6 @@ def main() -> None:
             }
 
             model_name = args.model or "baseline"
-
             model_version = model_versions[model_name]
 
             results, metrics = run_ssdi_analysis(
@@ -316,6 +386,77 @@ def main() -> None:
                 metrics=metrics,
                 model_version=model_version,
             )
+
+        # -----------------------------------------------------
+        # SSMD analysis
+        # -----------------------------------------------------
+
+        elif args.analysis_command == "ssmd":
+
+            if args.loo:
+
+                return
+
+            parser.error(
+                "SSMD analysis requires an analysis option. "
+                "Use: upscaling analyze ssmd --loo"
+            )
+
+        # ============================================================
+        # Experimental analysis
+        # ============================================================
+
+        elif args.analysis_command == "experimental":
+
+            if args.experimental_command == "summary":
+                from upscaling_app.analysis.experimental.pipeline import (
+                    run_experimental_analysis,
+                )
+                from upscaling_app.analysis.experimental.reporting import (
+                    print_experimental_analysis_report,
+                )
+
+                result = run_experimental_analysis(
+                    kind=args.kind,
+                )
+
+                print_experimental_analysis_report(result)
+
+            elif args.experimental_command == "ssdi":
+                from upscaling_app.analysis.experimental.pipeline import (
+                    run_ssdi_experimental_analysis,
+                )
+                from upscaling_app.analysis.experimental.reporting import (
+                    print_ssdi_experimental_report,
+                )
+
+                result = run_ssdi_experimental_analysis()
+
+                print_ssdi_experimental_report(result)
+
+            elif args.experimental_command == "ssmd":
+                from upscaling_app.analysis.experimental.pipeline import (
+                    run_ssmd_experimental_analysis,
+                )
+                from upscaling_app.analysis.experimental.reporting import (
+                    print_ssmd_experimental_report,
+                )
+
+                result = run_ssmd_experimental_analysis()
+
+                print_ssmd_experimental_report(result)
+
+            elif args.experimental_command == "treatment-effect":
+                from upscaling_app.analysis.experimental.pipeline import (
+                    run_treatment_effect_analysis,
+                )
+                from upscaling_app.analysis.experimental.reporting import (
+                    print_treatment_effect_report,
+                )
+
+                result = run_treatment_effect_analysis()
+
+                print_treatment_effect_report(result)
 
 
 if __name__ == "__main__":

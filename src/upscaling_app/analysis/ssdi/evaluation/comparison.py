@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from upscaling_app.analysis.ssdi.data import load_ssdi_results
+from upscaling_app.analysis.ssdi.io.data import load_ssdi_results
 from upscaling_app.analysis.ssdi.metrics import (
     add_point_metrics,
     calculate_global_metrics,
@@ -9,12 +9,14 @@ from upscaling_app.analysis.ssdi.metrics import (
 from upscaling_app.analysis.ssdi.outliers import mark_iqr_outliers
 from upscaling_app.upscaling.ssdi.versions import (
     BASELINE_VERSION,
+    REFERENCE_VERSION,
     FILTERED_VERSION,
     OIL_SENSITIVITY_VERSION,
 )
 
 MODEL_VERSIONS = [
     BASELINE_VERSION,
+    REFERENCE_VERSION,
     FILTERED_VERSION,
     OIL_SENSITIVITY_VERSION,
 ]

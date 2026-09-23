@@ -56,7 +56,6 @@ def run_leave_one_oil_out() -> LeaveOneOilOutResult:
         calibration = calibrate_ssdi(train)
 
         we_test = jnp.asarray(test["weber"].to_numpy())
-
         ca_test = jnp.asarray(test["capillary"].to_numpy())
 
         predictions = predict_ssdi(
@@ -71,7 +70,6 @@ def run_leave_one_oil_out() -> LeaveOneOilOutResult:
         predictions["held_out_oil"] = held_out_oil
 
         predictions = add_point_metrics(predictions)
-
         metrics = calculate_global_metrics(predictions)
 
         test_log_mse = float(np.mean(predictions["log_residual"] ** 2))

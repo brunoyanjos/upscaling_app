@@ -23,3 +23,12 @@ def normalize_distribution_tag(
         return f"WJ-{tag.removeprefix('WJ')}", has_gas
 
     raise ValueError(f"Unknown distribution tag: {column}")
+
+
+def water_jet_fraction(tag: str) -> float:
+    if not tag.startswith("WJ-"):
+        return 0.0
+
+    percentage = tag.removeprefix("WJ-").removesuffix("%")
+
+    return float(percentage) / 100.0
