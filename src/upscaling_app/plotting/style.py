@@ -2,6 +2,13 @@ from __future__ import annotations
 
 import matplotlib as mpl
 
+PRESENTATION_COLORS = {
+    "Verde": "#008543",
+    "Laranja": "#EC8B00",
+    "Cinza": "#63666B",
+    "Azul": "#016299",
+}
+
 APPLE_COLORS = {
     "red": "#FF383C",
     "orange": "#FF8D28",
@@ -19,7 +26,7 @@ APPLE_COLORS = {
 
 APPLE_GRAYS = {
     "gray": "#8E8E93",
-    "gray2": "#AEAEB2",
+    "gray2": "#282833",
     "gray3": "#C7C7CC",
     "gray4": "#D1D1D6",
     "gray5": "#E5E5EA",

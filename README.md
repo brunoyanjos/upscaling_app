@@ -40,17 +40,49 @@ upscaling_app/
 
 ## Installation
 
-Install the package in editable mode:
+Create and activate a virtual environment, then install the package and its
+dependencies in editable mode (Python 3.11 or newer):
 
 ```bash
-pip install -e .
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install -e .
 ```
+
+Activate the environment with `source venv/bin/activate` in each new terminal.
+Run these commands from the project root. If you move the project directory,
+repeat the editable installation so its source path is updated.
 
 The project-wide CLI entry point is:
 
 ```bash
 upscaling
 ```
+
+For example, run the SSMD workflow with:
+
+```bash
+upscaling ssmd
+```
+
+### macOS: package not found after a successful installation
+
+Use `venv` (without a leading dot) for the environment. On this machine, the
+macOS `hidden` flag was repeatedly applied to `.venv` and its contents. Python
+3.13 skips hidden `.pth` files, breaking the editable installation with
+`ModuleNotFoundError: No module named 'upscaling_app'`. Clearing the flag only
+provided a temporary repair; the process applying it has not been identified.
+
+When switching from the old environment, open a new terminal and run:
+
+```bash
+source venv/bin/activate
+upscaling ssdi
+```
+
+In VS Code, use **Python: Select Interpreter** to select `venv/bin/python` if
+the editor still has the old interpreter selected. You can also run
+`./venv/bin/upscaling ssdi` directly without activating the environment.
 
 ## Architecture
 

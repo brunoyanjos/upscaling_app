@@ -8,6 +8,7 @@ import pandas as pd
 
 from upscaling_app.plotting.style import (
     APPLE_COLORS,
+    PRESENTATION_COLORS,
     APPLE_GRAYS,
     apply_plot_style,
 )
@@ -219,7 +220,7 @@ def save_treatment_reduction_summary_plot(
     ax.bar(
         data["dispersion_tag"],
         data["median_reduction_pct"],
-        color=APPLE_COLORS["blue"],
+        color=PRESENTATION_COLORS["Azul"],
     )
 
     ax.set_ylabel(r"Median $d_{50}$ reduction [%]")
@@ -231,7 +232,7 @@ def save_treatment_reduction_summary_plot(
 
     ax.axhline(
         0.0,
-        color=APPLE_GRAYS["gray"],
+        color=PRESENTATION_COLORS["Cinza"],
         linestyle="--",
     )
 
@@ -301,14 +302,14 @@ def save_treatment_variability_plot(
         ax.scatter(
             [index] * len(regular),
             regular["median_reduction_pct"],
-            color=APPLE_COLORS["blue"],
+            color=PRESENTATION_COLORS["Azul"],
             alpha=0.75,
         )
 
         ax.scatter(
             [index] * len(outliers),
             outliers["median_reduction_pct"],
-            color=APPLE_COLORS["red"],
+            color=PRESENTATION_COLORS["Laranja"],
             alpha=0.9,
             zorder=3,
         )
@@ -381,7 +382,9 @@ def save_treatment_extremes_plot(
 
     labels = extremes["oil_id"].astype(str) + " — " + extremes["dispersion_tag"]
 
-    colors = [APPLE_COLORS["red"]] * len(worst) + [APPLE_COLORS["blue"]] * len(best)
+    colors = [PRESENTATION_COLORS["Laranja"]] * len(worst) + [
+        PRESENTATION_COLORS["Azul"]
+    ] * len(best)
 
     fig, ax = plt.subplots(
         figsize=(9, 7),
@@ -445,7 +448,7 @@ def save_water_jet_intensity_plot(
             group["water_jet_pct"],
             group["median_reduction_pct"],
             marker="o",
-            color=APPLE_GRAYS["gray"],
+            color=PRESENTATION_COLORS["Cinza"],
             alpha=0.35,
             linewidth=1.0,
             label=("Individual oils" if first_oil else None),
@@ -457,7 +460,7 @@ def save_water_jet_intensity_plot(
         by_fraction["water_jet_pct"],
         by_fraction["median_reduction_pct"],
         marker="o",
-        color=APPLE_COLORS["blue"],
+        color=PRESENTATION_COLORS["Azul"],
         linewidth=2.5,
         label="Median across oils",
         zorder=3,
@@ -517,7 +520,7 @@ def save_ssdi_dispersant_comparison_plot(
                 index,
                 index,
             ],
-            color=APPLE_GRAYS["gray"],
+            color=PRESENTATION_COLORS["Cinza"],
             linewidth=1.5,
             alpha=0.7,
             zorder=1,
@@ -526,7 +529,7 @@ def save_ssdi_dispersant_comparison_plot(
     ax.scatter(
         data["c9500_reduction_pct"],
         y,
-        color=APPLE_COLORS["blue"],
+        color=PRESENTATION_COLORS["Azul"],
         label="C9500",
         zorder=3,
     )
@@ -534,7 +537,7 @@ def save_ssdi_dispersant_comparison_plot(
     ax.scatter(
         data["ibc_reduction_pct"],
         y,
-        color=APPLE_COLORS["red"],
+        color=PRESENTATION_COLORS["Laranja"],
         label="IBC",
         zorder=3,
     )

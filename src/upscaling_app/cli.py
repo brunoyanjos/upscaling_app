@@ -82,20 +82,6 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     # =========================================================
-    # Distribution
-    # =========================================================
-
-    distribution_parser = subparsers.add_parser(
-        "distribution",
-    )
-
-    distribution_parser.add_argument(
-        "--config",
-        type=Path,
-        required=True,
-    )
-
-    # =========================================================
     # Analysis
     # =========================================================
 
@@ -157,6 +143,15 @@ def create_parser() -> argparse.ArgumentParser:
         "--loo",
         action="store_true",
         help="Run leave-one-oil-out validation.",
+    )
+
+    # ---------------------------------------------------------
+    # Distribution analysis
+    # ---------------------------------------------------------
+
+    analysis_subparsers.add_parser(
+        "distributions",
+        help="Analyze measured droplet-size distributions.",
     )
 
     # ---------------------------------------------------------
@@ -402,6 +397,22 @@ def main() -> None:
             )
 
             run_ssmd_analysis()
+
+            # -----------------------------------------------------
+            # SSMD analysis
+            # -----------------------------------------------------
+
+        elif args.analysis_command == "distributions":
+            from upscaling_app.analysis.distributions.pipeline import (
+                run_distribution_analysis,
+            )
+            from upscaling_app.analysis.distributions.reporting import (
+                print_distribution_analysis_report,
+            )
+
+            result = run_distribution_analysis()
+
+            print_distribution_analysis_report(result)
 
         # ============================================================
         # Experimental analysis
