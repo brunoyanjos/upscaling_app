@@ -397,10 +397,11 @@ def main() -> None:
 
                 return
 
-            parser.error(
-                "SSMD analysis requires an analysis option. "
-                "Use: upscaling analyze ssmd --loo"
+            from upscaling_app.analysis.ssmd.pipeline import (
+                run_ssmd_analysis,
             )
+
+            run_ssmd_analysis()
 
         # ============================================================
         # Experimental analysis

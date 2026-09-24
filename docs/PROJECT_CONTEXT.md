@@ -2,19 +2,37 @@
 
 ## Purpose
 
-The project develops a reproducible workflow for processing, modelling, and analysing oil-dispersion experiments.
+The project develops a reproducible scientific Python workflow for processing, modelling, predicting, and analysing oil-dispersion experiments.
 
 The main scientific components are:
 
 - SSDI modelling;
 - SSMD modelling;
-- droplet-size distribution analysis;
-- parameter estimation with JAX;
-- statistical validation and residual analysis.
+- droplet-size distribution modelling;
+- parameter estimation;
+- statistical analysis, residual analysis, and predictive validation.
 
-The current objective is to replace isolated analysis scripts with a structured application composed of normalized databases, reusable pipelines, configuration files, and a command-line interface.
+The application replaces isolated analysis scripts with normalized databases, reusable pipelines, explicit model versions, persisted results, and a project-wide command-line interface.
 
-## Current Architecture
+## Current status
+
+```text
+Milestone 1 — Data Architecture and CLI Foundation
+Status: Completed
+
+Milestone 2 — SSDI Pipeline Reconstruction
+Status: Completed
+
+Milestone 3 — SSMD Pipeline Reconstruction
+Status: In progress — finalization stage
+
+Next scientific workflow
+Droplet-size distributions
+```
+
+For the current presentation, the SSDI and SSMD blocks are considered closed. The next presentation section is droplet-size distributions.
+
+## Current architecture
 
 The Python package follows a `src/` layout:
 
@@ -23,15 +41,18 @@ upscaling_app/
 ├── configs/
 ├── data/
 │   ├── raw/
-│   └── database/
+│   ├── database/
+│   └── results/
 ├── docs/
 ├── src/
 │   └── upscaling_app/
 │       ├── analysis/
+│       │   ├── experimental/
+│       │   ├── ssdi/
+│       │   └── ssmd/
 │       ├── database/
 │       │   ├── build.py
 │       │   └── utils/
-│       ├── models/
 │       ├── upscaling/
 │       │   ├── ssdi/
 │       │   ├── ssmd/
@@ -54,9 +75,9 @@ The command-line entry point is:
 upscaling
 ```
 
-## Database Design
+## Database design
 
-Raw experimental files are not used directly by modelling pipelines.
+Raw experimental spreadsheets are not consumed directly by scientific pipelines.
 
 They are first converted into normalized databases:
 
@@ -72,28 +93,22 @@ experiments
 distributions
 ```
 
-### Oil properties
-
-`oil_properties.xlsx` stores properties that belong to the oil itself.
-
-Typical fields include:
+Current databases:
 
 ```text
-oil_id
-oil_name
-density
-pour_point
-wax_fraction
-asphaltene_fraction
-viscosity_20c
-viscosity_50c
+data/database/
+├── oil_properties.xlsx
+├── experiments.xlsx
+└── distributions.xlsx
 ```
 
-`oil_id` is the SINTEF oil code, such as `3014` or `4661`.
+### Oil properties
+
+`oil_properties.xlsx` stores properties associated with the oil itself, including identifiers, density, pour point, wax/asphaltene content, and reference viscosities.
 
 ### Experiments
 
-`experiments.xlsx` stores individual experimental conditions.
+`experiments.xlsx` stores normalized experimental conditions.
 
 Typical fields include:
 
@@ -107,6 +122,9 @@ has_gas
 ift
 oil_flow
 gas_flow
+water_jet_fraction
+water_flow
+water_nozzle_diameter
 oil_viscosity
 gas_density
 oil_density
@@ -114,15 +132,11 @@ measured_d50
 source_sheet
 ```
 
-The 2 mm experiments with and without gas are considered distinct experimental conditions.
-
-Gas presence must remain explicit through `has_gas` and `gas_flow`.
+The 2 mm conditions with and without gas remain distinct experimental regimes.
 
 ### Droplet-size distributions
 
-`distributions.xlsx` stores the measured droplet-size distribution associated with each experiment.
-
-The normalized structure is:
+`distributions.xlsx` stores measured droplet-size distribution data in normalized form:
 
 ```text
 experiment_id
@@ -130,27 +144,17 @@ droplet_diameter
 volume_fraction
 ```
 
-Each experiment therefore has multiple distribution rows.
+Each experiment therefore has multiple distribution rows linked by deterministic `experiment_id`.
 
 ## Identifiers
 
-`experiment_id` must be deterministic.
+`experiment_id` must remain deterministic.
 
 The same experiment must receive the same identifier every time the database is rebuilt.
 
-The identifier is generated from experimental metadata using UUID5 rather than UUID4.
+The current database architecture uses UUID5-based deterministic identifiers shared between experiment and distribution builders.
 
-The current identity uses:
-
-```text
-oil_id
-source sheet
-dispersion tag
-```
-
-The same identifier-generation function must be used by both the experiment builder and the distribution builder.
-
-## Dispersion Types
+## Dispersion types
 
 The current high-level classification is:
 
@@ -160,7 +164,7 @@ SSDI
 SSMD
 ```
 
-Examples of source tags include:
+Normalized tags include forms such as:
 
 ```text
 3014-Untreated
@@ -171,110 +175,200 @@ WJ-45%
 WJ-50%
 ```
 
-Raw source naming should be normalized during database construction rather than inside modelling pipelines.
+Raw source naming is normalized during database construction rather than interpreted inside modelling pipelines.
 
 ## Units
 
-Normalized databases should use SI units whenever applicable.
-
-Current convention:
+Normalized databases use SI units whenever applicable:
 
 ```text
 density              kg/m³
 dynamic viscosity    Pa·s
-diameter              m
-volumetric flow       m³/s
-interfacial tension   N/m
+diameter             m
+volumetric flow      m³/s
+interfacial tension  N/m
 fractions             dimensionless
 ```
 
-Temperature values such as pour point may remain in °C when this is the natural reporting unit.
+Temperature quantities such as pour point may remain in °C when that is the natural reporting unit.
 
-Conversions from source spreadsheets must occur during database construction.
-
-## CLI
-
-The current CLI is the application entry point.
-
-The first implemented database workflow is:
-
-```bash
-upscaling database build
-```
-
-This command builds:
-
-```text
-data/database/
-├── oil_properties.xlsx
-├── experiments.xlsx
-└── distributions.xlsx
-```
-
-Future workflows will include:
-
-```bash
-upscaling ssdi --config <config.toml>
-upscaling ssmd --config <config.toml>
-upscaling distribution --config <config.toml>
-upscaling analyze --config <config.toml>
-```
-
-## Design Principles
-
-The project should follow these rules:
+## Architectural rules
 
 1. Raw spreadsheets are parsed only in the database layer.
 2. Modelling pipelines consume normalized databases.
-3. Physical equations must remain separate from data ingestion.
-4. Statistical analysis must remain separate from model calibration.
-5. Experimental identifiers must be stable across database rebuilds.
-6. SI units should be used internally whenever applicable.
-7. Reusable logic should live inside `src/upscaling_app/`.
-8. Avoid numbered one-off scripts as the project grows.
-9. Configuration should define experimental selections and model settings rather than hard-coded constants.
-10. Database rebuilding should be deterministic and idempotent.
+3. Physical equations remain separate from data ingestion.
+4. Calibration / optimization remain separate from statistical analysis.
+5. Prediction outputs are persisted before downstream model evaluation whenever practical.
+6. Experimental identifiers remain stable across database rebuilds.
+7. SI units are used internally whenever applicable.
+8. Reusable logic belongs inside `src/upscaling_app/`.
+9. Avoid numbered one-off scripts as the long-term execution path.
+10. Exploratory models must remain distinguishable from production-reference models.
 
-## Milestone 1 — Data Architecture and CLI Foundation
+## SSDI status
 
-Current completed work:
+Milestone 2 is completed.
 
-- migration to a `src/` Python package layout;
-- `pyproject.toml` package configuration;
-- CLI entry point;
-- database build command;
-- oil-property database design;
-- experiment database design;
-- droplet-size distribution database design;
-- deterministic experiment identifiers;
-- normalization of raw SINTEF data.
-
-## Next Milestone — SSDI Pipeline
-
-The next development phase is the reconstruction of the SSDI workflow using the normalized database architecture.
-
-The previous SSDI implementation included:
-
-- dataset selection by oil and nozzle diameter;
-- Weber and Capillary number evaluation;
-- grid search for initial coefficients;
-- JAX-based model evaluation;
-- gradient calculation with `jax.value_and_grad`;
-- L-BFGS-B coefficient optimization;
-- parity analysis;
-- residual analysis;
-- IQR-based outlier investigation.
-
-The new implementation should preserve the validated physical formulation while removing hard-coded dataset selections and separating:
+The SSDI architecture separates:
 
 ```text
 data selection
-physics
-optimization
+        ↓
+derived physics
+        ↓
+physical correlation
+        ↓
+coefficient calibration
+        ↓
 prediction
-metrics
-outlier analysis
-result persistence
+        ↓
+persistence
+        ↓
+statistical analysis
+        ↓
+predictive validation
 ```
 
-The SSDI reconstruction should be performed before expanding the same architecture to SSMD and distribution-model fitting.
+The current presentation includes hydrodynamic screening, physical scaling, coefficient calibration, parity analysis, residual diagnostics, in-sample sensitivity analyses, and leave-one-oil-out validation.
+
+## SSMD status
+
+Milestone 3 is in finalization.
+
+### Dataset
+
+```text
+90 SSMD experiments
+10 oils
+
+30 — 3 mm, no gas
+30 — 2 mm, no gas
+30 — 2 mm, gas
+```
+
+### Derived physics
+
+The SSMD preprocessing includes untreated-release hydrodynamics and water-jet quantities such as:
+
+```text
+water_velocity
+water_momentum_flux
+water_kinetic_power
+oil / gas momentum
+momentum_amplification
+```
+
+The primary treatment variable is:
+
+```text
+A_M = (M_o + M_w) / M_o
+```
+
+The measured relative response is:
+
+```text
+dR_measured = measured_d50 / untreated_d50_measured
+```
+
+### Production reference
+
+SINTEF Equation 5:
+
+```text
+dR = (eta A_M)^(-3/5)
+Log-MSE = 0.716712
+```
+
+SINTEF Equation 6:
+
+```text
+dR = (eta A_M)^(-3/5) * (c + d mu/sigma)
+Log-MSE = 0.128723
+```
+
+The IFT term uses the untreated reference IFT.
+
+### Current model versions
+
+```text
+sintef_baseline
+regressed_cd_baseline
+regressed_cd_global
+```
+
+`regressed_cd_global` fits one global pair of `c,d` coefficients over all SSMD experiments while retaining the SINTEF model structure and gas-dependent `eta` treatment.
+
+Current approximate global fit:
+
+```text
+c_global ≈ 0.4457
+d_global ≈ 0.0257
+Log-MSE  ≈ 0.116
+R²_log   ≈ 0.548
+```
+
+The reconstructed SINTEF Equation-6 reference gives approximately:
+
+```text
+Log-MSE ≈ 0.129
+R²_log  ≈ 0.498
+```
+
+The global `c,d` regression therefore reduces Log-MSE by approximately 10.1% while replacing regime-specific `c,d` values with a single pair.
+
+This is an in-sample calibration result. `eta` remains condition dependent, and no universal full-scale SSMD closure has yet been validated.
+
+### SSMD analysis
+
+Model evaluation is separated from calibration.
+
+The SSMD analysis workflow consumes persisted predictions and currently supports parity comparisons for the momentum-only Equation 5, reconstructed SINTEF Equation 6, and the global `c,d` regression.
+
+Experimental SSMD analysis remains in `analysis/experimental/` and includes descriptive regime response, monotonicity, and physical screening diagnostics.
+
+## CLI
+
+The `upscaling` command remains the project-wide execution entry point.
+
+Current analysis examples include:
+
+```bash
+upscaling analyze experimental descriptive
+upscaling analyze experimental ssdi
+upscaling analyze experimental ssmd
+upscaling analyze experimental treatment-effect
+upscaling analyze ssmd
+```
+
+CLI command naming should be treated as part of the public project surface and stabilized before Milestone 3 is formally closed.
+
+## Next scientific workflow — droplet-size distributions
+
+The next phase is to reconstruct the droplet-size distribution workflow using the normalized `distributions.xlsx` database.
+
+Before structural changes, inspect:
+
+```text
+- the normalized distribution database;
+- existing distribution-related source files;
+- any previous analytical distribution fitting methodology;
+- current presentation requirements.
+```
+
+The distribution pipeline should preserve the same separation used elsewhere:
+
+```text
+data selection
+        ↓
+distribution formulation
+        ↓
+parameter estimation
+        ↓
+prediction
+        ↓
+persistence
+        ↓
+statistical evaluation
+```
+
+No new distribution model structure should be introduced before the existing implementation and project documentation are reviewed.

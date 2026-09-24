@@ -651,3 +651,531 @@ def save_ssdi_spearman_plot(
     )
 
     plt.close(fig)
+
+
+SSMD_REGIME_COLORS = {
+    "2 mm — no gas": APPLE_COLORS["blue"],
+    "3 mm — no gas": APPLE_GRAYS["gray"],
+    "2 mm — gas": APPLE_COLORS["red"],
+}
+
+
+def save_ssmd_regime_response_plot(
+    summary: pd.DataFrame,
+    output: Path,
+) -> None:
+    apply_plot_style()
+
+    output.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    fig, ax = plt.subplots(
+        figsize=(9, 7),
+    )
+
+    regime_order = [
+        "2 mm — no gas",
+        "3 mm — no gas",
+        "2 mm — gas",
+    ]
+
+    for regime in regime_order:
+        group = summary.loc[summary["regime"] == regime].sort_values("water_jet_pct")
+
+        if group.empty:
+            continue
+
+        color = SSMD_REGIME_COLORS[regime]
+
+        ax.plot(
+            group["water_jet_pct"],
+            group["median_reduction_pct"],
+            marker="o",
+            color=color,
+            linewidth=2.5,
+            label=regime,
+            zorder=3,
+        )
+
+        ax.fill_between(
+            group["water_jet_pct"],
+            group["q1_reduction_pct"],
+            group["q3_reduction_pct"],
+            color=color,
+            alpha=0.12,
+            linewidth=0.0,
+            zorder=1,
+        )
+
+    ax.set_xlabel("Water-jet fraction [%]")
+
+    ax.set_ylabel(r"Median $d_{50}$ reduction [%]")
+
+    ax.set_xticks([40, 45, 50, 55])
+
+    ax.grid(
+        True,
+        linestyle="--",
+        alpha=0.3,
+    )
+
+    ax.legend()
+
+    fig.tight_layout()
+
+    fig.savefig(
+        output,
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+    plt.close(fig)
+
+
+def save_ssmd_gas_effect_plot(
+    summary: pd.DataFrame,
+    output: Path,
+) -> None:
+    apply_plot_style()
+
+    output.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    regimes = {
+        "2 mm — no gas": APPLE_COLORS["blue"],
+        "2 mm — gas": APPLE_COLORS["red"],
+    }
+
+    data = summary.loc[summary["regime"].isin(regimes)].copy()
+
+    fig, ax = plt.subplots(
+        figsize=(9, 7),
+    )
+
+    for regime, color in regimes.items():
+        group = data.loc[data["regime"] == regime].sort_values("water_jet_pct")
+
+        ax.plot(
+            group["water_jet_pct"],
+            group["median_reduction_pct"],
+            marker="o",
+            color=color,
+            linewidth=2.5,
+            label=regime,
+            zorder=3,
+        )
+
+        ax.fill_between(
+            group["water_jet_pct"],
+            group["q1_reduction_pct"],
+            group["q3_reduction_pct"],
+            color=color,
+            alpha=0.12,
+            linewidth=0.0,
+            zorder=1,
+        )
+
+    no_gas = data.loc[
+        data["regime"] == "2 mm — no gas",
+        [
+            "water_jet_pct",
+            "median_reduction_pct",
+        ],
+    ].rename(
+        columns={
+            "median_reduction_pct": ("no_gas_reduction"),
+        }
+    )
+
+    gas = data.loc[
+        data["regime"] == "2 mm — gas",
+        [
+            "water_jet_pct",
+            "median_reduction_pct",
+        ],
+    ].rename(
+        columns={
+            "median_reduction_pct": ("gas_reduction"),
+        }
+    )
+
+    comparison = no_gas.merge(
+        gas,
+        on="water_jet_pct",
+        validate="one_to_one",
+    )
+
+    comparison["delta"] = comparison["gas_reduction"] - comparison["no_gas_reduction"]
+
+    for _, row in comparison.iterrows():
+        midpoint = (row["gas_reduction"] + row["no_gas_reduction"]) / 2.0
+
+        ax.text(
+            row["water_jet_pct"] + 0.4,
+            midpoint,
+            f"{row['delta']:.1f} p.p.",
+            color=APPLE_GRAYS["gray"],
+            va="center",
+        )
+
+    ax.set_xlabel("Water-jet fraction [%]")
+
+    ax.set_ylabel(r"Median $d_{50}$ reduction [%]")
+
+    ax.set_xticks([40, 45, 50])
+
+    ax.grid(
+        True,
+        linestyle="--",
+        alpha=0.3,
+    )
+
+    ax.legend()
+
+    fig.tight_layout()
+
+    fig.savefig(
+        output,
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+    plt.close(fig)
+
+
+def save_ssmd_momentum_spearman_plot(
+    summary: pd.DataFrame,
+    output: Path,
+) -> None:
+    apply_plot_style()
+
+    output.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    regime_order = [
+        "3 mm — no gas",
+        "2 mm — gas",
+        "2 mm — no gas",
+    ]
+
+    colors = {
+        "2 mm — no gas": APPLE_COLORS["blue"],
+        "3 mm — no gas": APPLE_GRAYS["gray"],
+        "2 mm — gas": APPLE_COLORS["red"],
+    }
+
+    data = summary.set_index("regime").loc[regime_order].reset_index()
+
+    y = np.arange(len(data))
+
+    ax_colors = [colors[regime] for regime in data["regime"]]
+
+    fig, ax = plt.subplots(
+        figsize=(9, 7),
+    )
+
+    ax.barh(
+        y,
+        data["spearman_rho"],
+        color=ax_colors,
+    )
+
+    ax.axvline(
+        0.0,
+        color=APPLE_GRAYS["gray"],
+        linestyle="--",
+    )
+
+    for index, value in enumerate(data["spearman_rho"]):
+        ax.text(
+            value - 0.03,
+            index,
+            f"{value:.2f}",
+            va="center",
+            ha="right",
+        )
+
+    ax.set_yticks(y)
+
+    ax.set_yticklabels(data["regime"])
+
+    ax.set_xlabel(r"Spearman correlation with $d_R$, $\rho_s$")
+
+    ax.set_xlim(
+        -1.0,
+        0.2,
+    )
+
+    ax.grid(
+        axis="x",
+        linestyle="--",
+        alpha=0.3,
+    )
+
+    fig.tight_layout()
+
+    fig.savefig(
+        output,
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+    plt.close(fig)
+
+
+def save_ssmd_momentum_response_plot(
+    data: pd.DataFrame,
+    output: Path,
+) -> None:
+    apply_plot_style()
+
+    output.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    regime_order = [
+        "2 mm — no gas",
+        "3 mm — no gas",
+        "2 mm — gas",
+    ]
+
+    colors = {
+        "2 mm — no gas": APPLE_COLORS["blue"],
+        "3 mm — no gas": APPLE_GRAYS["gray"],
+        "2 mm — gas": APPLE_COLORS["red"],
+    }
+
+    fig, ax = plt.subplots(
+        figsize=(9, 7),
+    )
+
+    for regime in regime_order:
+        group = data.loc[data["regime"] == regime].copy()
+
+        valid = (
+            (group["momentum_amplification"] > 0.0)
+            & (group["dR_measured"] > 0.0)
+            & np.isfinite(group["momentum_amplification"])
+            & np.isfinite(group["dR_measured"])
+        )
+
+        group = group.loc[valid]
+
+        if group.empty:
+            continue
+
+        x = np.log10(group["momentum_amplification"].to_numpy())
+
+        y = np.log10(group["dR_measured"].to_numpy())
+
+        slope, intercept = np.polyfit(
+            x,
+            y,
+            1,
+        )
+
+        y_pred = intercept + slope * x
+
+        ss_res = np.sum((y - y_pred) ** 2)
+
+        ss_tot = np.sum((y - y.mean()) ** 2)
+
+        r2_log = 1.0 - ss_res / ss_tot
+
+        color = colors[regime]
+
+        ax.scatter(
+            group["momentum_amplification"],
+            group["dR_measured"],
+            color=color,
+            alpha=0.65,
+            zorder=3,
+        )
+
+        x_fit = np.logspace(
+            np.log10(group["momentum_amplification"].min()),
+            np.log10(group["momentum_amplification"].max()),
+            200,
+        )
+
+        y_fit = 10.0**intercept * x_fit**slope
+
+        ax.plot(
+            x_fit,
+            y_fit,
+            color=color,
+            linewidth=2.5,
+            label=(
+                f"{regime}: " f"slope={slope:.2f}, " rf"$R^2_{{\log}}$={r2_log:.2f}"
+            ),
+        )
+
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+
+    ax.set_xlabel(r"Momentum amplification, $A_M$")
+
+    ax.set_ylabel(r"Relative droplet size, $d_R$")
+
+    ax.grid(
+        True,
+        which="both",
+        linestyle="--",
+        alpha=0.3,
+    )
+
+    ax.legend()
+
+    fig.tight_layout()
+
+    fig.savefig(
+        output,
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+    plt.close(fig)
+
+
+def save_ssmd_global_momentum_response_plot(
+    data: pd.DataFrame,
+    output: Path,
+) -> None:
+    apply_plot_style()
+
+    output.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    colors = {
+        "2 mm — no gas": APPLE_COLORS["blue"],
+        "3 mm — no gas": APPLE_GRAYS["gray"],
+        "2 mm — gas": APPLE_COLORS["red"],
+    }
+
+    valid = (
+        data["momentum_amplification"].notna()
+        & data["dR_measured"].notna()
+        & np.isfinite(data["momentum_amplification"])
+        & np.isfinite(data["dR_measured"])
+        & (data["momentum_amplification"] > 0.0)
+        & (data["dR_measured"] > 0.0)
+    )
+
+    plot_data = data.loc[valid].copy()
+
+    # ========================================================
+    # Global log-log regression
+    # ========================================================
+
+    x_log = np.log10(plot_data["momentum_amplification"].to_numpy())
+
+    y_log = np.log10(plot_data["dR_measured"].to_numpy())
+
+    slope, intercept = np.polyfit(
+        x_log,
+        y_log,
+        1,
+    )
+
+    y_pred_log = intercept + slope * x_log
+
+    ss_res = np.sum((y_log - y_pred_log) ** 2)
+
+    ss_tot = np.sum((y_log - y_log.mean()) ** 2)
+
+    r2_log = 1.0 - ss_res / ss_tot
+
+    # ========================================================
+    # Plot
+    # ========================================================
+
+    fig, ax = plt.subplots(
+        figsize=(9, 7),
+    )
+
+    for regime, group in plot_data.groupby(
+        "regime",
+        sort=False,
+    ):
+        ax.scatter(
+            group["momentum_amplification"],
+            group["dR_measured"],
+            color=colors.get(
+                regime,
+                APPLE_GRAYS["gray"],
+            ),
+            alpha=0.70,
+            label=regime,
+            zorder=3,
+        )
+
+    x_fit = np.logspace(
+        np.log10(plot_data["momentum_amplification"].min()),
+        np.log10(plot_data["momentum_amplification"].max()),
+        200,
+    )
+
+    y_fit = 10.0**intercept * x_fit**slope
+
+    ax.plot(
+        x_fit,
+        y_fit,
+        color=APPLE_GRAYS["gray"],
+        linestyle="--",
+        linewidth=2.5,
+        label="Global log-log fit",
+        zorder=2,
+    )
+
+    # ========================================================
+    # Metrics
+    # ========================================================
+
+    metric_text = f"Slope = {slope:.3f}\n" f"$R^2_{{\\log}}$ = {r2_log:.3f}"
+
+    ax.text(
+        0.05,
+        0.05,
+        metric_text,
+        transform=ax.transAxes,
+        verticalalignment="bottom",
+    )
+
+    # ========================================================
+    # Style
+    # ========================================================
+
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+
+    ax.set_xlabel(r"Momentum amplification, $A_M$")
+
+    ax.set_ylabel(r"Relative droplet size, $d_R$")
+
+    ax.grid(
+        True,
+        which="both",
+        linestyle="--",
+        alpha=0.3,
+    )
+
+    ax.legend()
+
+    fig.tight_layout()
+
+    fig.savefig(
+        output,
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+    plt.close(fig)

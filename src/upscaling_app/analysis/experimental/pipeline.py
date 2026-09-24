@@ -24,6 +24,11 @@ from upscaling_app.analysis.experimental.plotting import (
     save_treatment_reduction_summary_plot,
     save_treatment_variability_plot,
     save_water_jet_intensity_plot,
+    save_ssmd_regime_response_plot,
+    save_ssmd_gas_effect_plot,
+    save_ssmd_momentum_spearman_plot,
+    save_ssmd_momentum_response_plot,
+    save_ssmd_global_momentum_response_plot,
 )
 from upscaling_app.analysis.experimental.ssdi import (
     build_ssdi_relation_summary,
@@ -45,6 +50,9 @@ from upscaling_app.analysis.experimental.treatment_effect import (
 
 from upscaling_app.analysis.experimental.ssmd import (
     build_ssmd_gas_comparison,
+    build_ssmd_hydrodynamic_spearman_summary,
+    build_ssmd_property_correction_summary,
+    build_ssmd_property_spearman_summary,
     build_ssmd_spearman_summary,
     prepare_ssmd_experimental_data,
     summarize_ssmd_by_fraction_and_regime,
@@ -273,6 +281,9 @@ class SSMDExperimentalResult:
     by_fraction_regime: pd.DataFrame
 
     spearman_summary: pd.DataFrame
+    hydrodynamic_spearman: pd.DataFrame
+    property_spearman: pd.DataFrame
+    property_correction_spearman: pd.DataFrame
 
     monotonicity: pd.DataFrame
     monotonicity_by_regime: pd.DataFrame
@@ -292,6 +303,12 @@ def run_ssmd_experimental_analysis() -> SSMDExperimentalResult:
 
     spearman_summary = build_ssmd_spearman_summary(data)
 
+    hydrodynamic_spearman = build_ssmd_hydrodynamic_spearman_summary(data)
+
+    property_spearman = build_ssmd_property_spearman_summary(data)
+
+    property_correction_spearman = build_ssmd_property_correction_summary(data)
+
     monotonicity = summarize_ssmd_monotonicity(data)
 
     monotonicity_by_regime = summarize_ssmd_monotonicity_by_regime(monotonicity)
@@ -300,13 +317,51 @@ def run_ssmd_experimental_analysis() -> SSMDExperimentalResult:
 
     gas_comparison_summary = summarize_ssmd_gas_comparison(gas_comparison)
 
+    output_dir = paths.EXPERIMENTAL_FIGURES_DIR / "ssmd"
+
+    save_ssmd_regime_response_plot(
+        by_fraction_regime,
+        output_dir / "ssmd_response_by_regime.png",
+    )
+
+    save_ssmd_gas_effect_plot(
+        by_fraction_regime,
+        (paths.EXPERIMENTAL_FIGURES_DIR / "ssmd" / "ssmd_gas_effect.png"),
+    )
+
+    save_ssmd_momentum_spearman_plot(
+        hydrodynamic_spearman,
+        (paths.EXPERIMENTAL_FIGURES_DIR / "ssmd" / "ssmd_momentum_spearman.png"),
+    )
+
+    save_ssmd_momentum_response_plot(
+        data,
+        (
+            paths.EXPERIMENTAL_FIGURES_DIR
+            / "ssmd"
+            / "ssmd_dR_vs_momentum_amplification.png"
+        ),
+    )
+
+    save_ssmd_global_momentum_response_plot(
+        data,
+        (
+            paths.EXPERIMENTAL_FIGURES_DIR
+            / "ssmd"
+            / "ssmd_global_dR_vs_momentum_amplification.png"
+        ),
+    )
+
     return SSMDExperimentalResult(
         data=data,
         by_regime=by_regime,
         by_fraction_regime=by_fraction_regime,
         spearman_summary=spearman_summary,
+        hydrodynamic_spearman=(hydrodynamic_spearman),
+        property_spearman=(property_spearman),
+        property_correction_spearman=(property_correction_spearman),
         monotonicity=monotonicity,
-        monotonicity_by_regime=monotonicity_by_regime,
+        monotonicity_by_regime=(monotonicity_by_regime),
         gas_comparison=gas_comparison,
         gas_comparison_summary=(gas_comparison_summary),
     )

@@ -244,6 +244,53 @@ def print_ssmd_experimental_report(
         )
     )
 
+    _print_separator("SSMD MOMENTUM-AMPLIFICATION SPEARMAN SCREENING")
+
+    print(
+        result.hydrodynamic_spearman[
+            [
+                "regime",
+                "n",
+                "n_oils",
+                "spearman_rho",
+            ]
+        ].to_string(
+            index=False,
+            float_format=lambda x: f"{x:.4f}",
+        )
+    )
+
+    _print_separator("SSMD OIL-PROPERTY SPEARMAN SCREENING")
+
+    print(
+        result.property_spearman[
+            [
+                "regime",
+                "variable",
+                "n_oils",
+                "spearman_rho",
+            ]
+        ].to_string(
+            index=False,
+            float_format=lambda x: f"{x:.4f}",
+        )
+    )
+
+    _print_separator("SSMD SINTEF PROPERTY-CORRECTION SCREENING")
+
+    print(
+        result.property_correction_spearman[
+            [
+                "regime",
+                "n_oils",
+                "spearman_rho",
+            ]
+        ].to_string(
+            index=False,
+            float_format=lambda x: f"{x:.4f}",
+        )
+    )
+
 
 # ============================================================
 # Treatment-effect analysis

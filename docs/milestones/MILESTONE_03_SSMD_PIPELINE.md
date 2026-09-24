@@ -1,14 +1,14 @@
 # Milestone 3 — SSMD Pipeline Reconstruction
 
-**Status:** In progress
+**Status:** In progress — finalization stage
 
 ## Objective
 
 Reconstruct the SSMD modelling workflow on top of the normalized database architecture established in Milestone 1 and the modelling architecture established in Milestone 2.
 
-The SSMD pipeline must preserve the validated SINTEF formulation as the production reference while keeping data access, derived physics, calibration, prediction, persistence, statistical analysis, and predictive validation separated.
+The SSMD pipeline preserves the reconstructed SINTEF formulation as the production reference while keeping data access, derived physics, calibration, prediction, persistence, statistical analysis, and predictive validation separated.
 
-Exploratory research on alternative SSMD upscaling correlations must remain isolated from the reconstructed production pipeline.
+Exploratory research on alternative SSMD upscaling correlations remains isolated from the production-reference workflow.
 
 ---
 
@@ -20,7 +20,7 @@ Exploratory research on alternative SSMD upscaling correlations must remain isol
 
 The SSMD workflow consumes the normalized experiment database rather than the original SINTEF spreadsheets.
 
-The SSMD dataset currently contains:
+The current SSMD dataset contains:
 
 ```text
 90 SSMD experiments
@@ -35,7 +35,7 @@ Raw spreadsheet interpretation remains confined to the database layer.
 
 ### SSMD-specific normalized fields
 
-The experiment database was extended with:
+The experiment database includes:
 
 ```text
 water_jet_fraction
@@ -61,7 +61,7 @@ nozzle_diameter
 has_gas
 ```
 
-The SSMD calibration dataset keeps measured and predicted untreated droplet sizes separate:
+The modelling workflow keeps measured and predicted untreated droplet sizes separate:
 
 ```text
 untreated_d50_measured
@@ -71,40 +71,20 @@ untreated_d50_pred
 For SSMD model development:
 
 ```text
-dR_measured =
-    measured_d50 / untreated_d50_measured
+dR_measured = measured_d50 / untreated_d50_measured
 ```
 
 For end-to-end prediction:
 
 ```text
-d50_treated_pred =
-    dR_pred * untreated_d50_pred
+d50_treated_pred = dR_pred * untreated_d50_pred
 ```
 
-The predicted untreated diameter is obtained from persisted SSDI reference predictions rather than recalculated inside SSMD.
-
-### SSDI integration
-
-SSMD consumes persisted SSDI results through:
-
-```text
-experiment_id
-model_version
-d50_pred
-```
-
-The current reference SSDI version is:
-
-```text
-sintef_baseline
-```
+The predicted untreated diameter is consumed from persisted SSDI reference predictions rather than recalculated inside SSMD.
 
 ### Untreated hydrodynamics
 
-The untreated hydrodynamics were reconstructed consistently with the validated SINTEF implementation.
-
-Derived quantities include:
+The reconstructed preprocessing computes the untreated release quantities required by the SSMD formulation, including:
 
 ```text
 untreated_gas_void_fraction
@@ -119,8 +99,7 @@ untreated_effective_velocity
 For gas-containing releases:
 
 ```text
-U_vol =
-    (Q_oil + Q_gas) / A
+U_vol = (Q_oil + Q_gas) / A
 
 rho_mix =
     (rho_oil Q_oil + rho_gas Q_gas)
@@ -130,7 +109,7 @@ U_modified =
     U_vol sqrt(rho_mix / rho_oil)
 ```
 
-The reduced gravity uses ambient seawater density:
+Reference ambient constants:
 
 ```text
 rho_water_jet = 1000 kg/m³
@@ -151,18 +130,15 @@ water_kinetic_power
 with:
 
 ```text
-A_w = π D_w² / 4
-
+A_w = pi D_w² / 4
 U_w = Q_w / A_w
-
 M_w = rho_w Q_w U_w
-
 P_w = 1/2 rho_w Q_w U_w²
 ```
 
-### Oil / gas momentum
+### Oil / gas momentum and momentum amplification
 
-The untreated oil/gas momentum flux is evaluated using the untreated effective velocity:
+The untreated oil/gas momentum flux is evaluated with the untreated effective velocity:
 
 ```text
 M_o =
@@ -173,107 +149,210 @@ M_o =
 The momentum amplification is:
 
 ```text
-A_M =
-    (M_o + M_w) / M_o
-```
-
-### Relative droplet-size response
-
-The experimental SSMD response is:
-
-```text
-dR_measured =
-    d50_treated_measured
-    / d50_untreated_measured
+A_M = (M_o + M_w) / M_o
 ```
 
 ---
 
-## 3.2 SINTEF Baseline Reconstruction
+## 3.2 SINTEF Reference Reconstruction
 
-**Status:** Reconstructed; production workflow still to be finalized
+**Status:** Completed and reproducible
 
 ### Equation 5
 
 The reconstructed SINTEF momentum-amplification model is:
 
+```text
 dR = (eta A_M)^(-3/5)
+```
 
-The SINTEF efficiency factors are:
+Reference efficiency factors:
 
 ```text
 no gas    eta = 0.85
 with gas  eta = 0.68
 ```
 
-### Equation 6
-
-The oil-property correction is:
-
-dR = (eta A_M)^(-3/5) * (c + d mu/sigma)
-
-The reconstructed full-precision reference coefficients are:
+Reference performance:
 
 ```text
-3 mm:
+Log-MSE = 0.7167120356
+```
+
+### Equation 6
+
+The reconstructed oil-property correction is:
+
+```text
+dR = (eta A_M)^(-3/5) * (c + d mu/sigma)
+```
+
+The IFT term uses the untreated reference IFT.
+
+Full-precision reconstructed SINTEF coefficients:
+
+```text
+3 mm — no gas
 eta = 0.85
 c   = 0.33063475973887657
 d   = 0.05
 
-2 mm:
+2 mm — no gas
 eta = 0.85
 c   = 0.46170083447858073
 d   = 0.05
 
-2 mm + gas:
+2 mm — gas
 eta = 0.6779545878291601
 c   = 0.5720125321034614
 d   = 0.05
 ```
 
-The IFT term must use the untreated reference IFT.
-
-### Reconstructed reference performance
+Reference performance:
 
 ```text
-Equation 5 — SINTEF
-Log-MSE = 0.7167120356
-
-Equation 6 — SINTEF
 Log-MSE = 0.1287225708
 ```
 
-### Prediction convention
-
-The final treated prediction uses:
-
-```text
-d50_treated_pred =
-    dR_pred * untreated_d50_pred
-```
-
-The measured untreated diameter is used only for experimental response construction and calibration diagnostics.
+The large improvement relative to Equation 5 is part of the reconstructed SINTEF reference and does not by itself constitute independent physical validation of the correction term.
 
 ---
 
-## 3.3 Statistical Validation and Model Limitations
+## 3.3 Explicit SSMD Model Versions
 
-**Status:** Partially completed
+**Status:** Implemented
 
-### Diagnostic analyses performed
-
-The current reconstruction has already been used to investigate:
+The current production SSMD package defines:
 
 ```text
-logarithmic residuals
-momentum-amplification sensitivity
-gas / no-gas separation
-oil-property residual structure
-leave-one-oil-out diagnostics
-within-group response to water-jet intensity
+sintef_baseline
+regressed_cd_baseline
+regressed_cd_global
 ```
 
-These analyses guide a separate research programme and must not replace the reconstructed SINTEF baseline.
+### `sintef_baseline`
+
+Uses the reconstructed SINTEF Equation-6 coefficients by experimental regime.
+
+### `regressed_cd_baseline`
+
+Preserves the SINTEF model structure and `eta` treatment while fitting `c,d` separately for each experimental regime.
+
+This version is useful as a calibration diagnostic but retains regime-specific empirical coefficients.
+
+### `regressed_cd_global`
+
+Preserves the same Equation-6 structure while fitting one global `c,d` pair across all 90 SSMD experiments.
+
+Current global coefficients are approximately:
+
+```text
+c = 0.4457
+d = 0.0257
+```
+
+Current global in-sample performance:
+
+```text
+Log-MSE ≈ 0.116
+R²_log  ≈ 0.548
+```
+
+For comparison, the reconstructed SINTEF reference gives approximately:
+
+```text
+Log-MSE ≈ 0.129
+R²_log  ≈ 0.498
+```
+
+Therefore the global `c,d` regression reduces Log-MSE by approximately:
+
+```text
+10.1 %
+```
+
+Interpretation:
+
+> A single global `c,d` pair slightly improves the overall in-sample fit while removing the regime dependence of these two coefficients.
+
+Important limitation:
+
+```text
+eta remains gas-condition dependent
+```
+
+The global regression is therefore an upscaling-oriented simplification, not a completed universal SSMD closure.
+
+---
+
+## 3.4 Prediction and Persistence
+
+**Status:** Implemented
+
+The SSMD baseline workflow currently:
+
+```text
+load normalized calibration data
+        ↓
+add derived SSMD physics
+        ↓
+build SINTEF reference prediction
+        ↓
+fit c,d by regime
+        ↓
+fit global c,d
+        ↓
+build experiment-level prediction tables
+        ↓
+persist predictions
+```
+
+Prediction outputs contain explicit `model_version` labels so that model analysis can consume persisted results without recalibrating inside the analysis layer.
+
+The final treated prediction convention remains:
+
+```text
+d50_treated_pred = dR_pred * untreated_d50_pred
+```
+
+---
+
+## 3.5 Statistical Analysis and Presentation Evaluation
+
+**Status:** Implemented for current presentation needs; predictive validation remains incomplete
+
+The modelling and analysis responsibilities are separated.
+
+The `analysis/ssmd/` workflow currently supports model evaluation from persisted predictions, including parity analysis for:
+
+```text
+Equation 5 reference
+SINTEF Equation 6 reference
+regressed_cd_global
+```
+
+Current presentation reference metrics:
+
+```text
+Equation 5
+Log-MSE = 0.716712
+
+SINTEF Equation 6
+Log-MSE = 0.128723
+R²_log  ≈ 0.498
+
+Global regressed c,d
+Log-MSE ≈ 0.116
+R²_log  ≈ 0.548
+```
+
+The experimental-analysis layer also contains SSMD-specific descriptive diagnostics, including regime-separated water-jet response, monotonicity, hydrodynamic screening, and property screening.
+
+These diagnostics are descriptive and must remain distinct from model calibration and predictive validation.
+
+---
+
+## 3.6 Known Scientific Limitations
 
 ### Experimental-regime structure
 
@@ -309,78 +388,56 @@ P_w proportional to Q_w³
 
 Therefore the current campaign cannot independently identify whether water flow, velocity, momentum flux, or kinetic power is the fundamental controlling variable.
 
-### Full-scale limitation of the SINTEF correlation
+### Full-scale limitation
 
-The reconstructed SINTEF model requires:
+The SINTEF formulation still contains empirical parameters whose transferability is incomplete.
 
-```text
-eta
-c
-d
-```
+The global regression removes regime dependence from `c,d`, but `eta` remains condition dependent.
 
-whose values are currently condition-dependent.
+No universal mapping from arbitrary full-scale operating conditions to all SSMD coefficients has yet been validated.
 
-The campaign does not provide a universal mapping from full-scale operating conditions to these coefficients.
-
-The reconstructed model should therefore be interpreted as valid within the experimental domain, not as a closed universal full-scale SSMD correlation.
-
-The extrapolation research is tracked separately in:
+Exploratory correlation development remains tracked separately in:
 
 ```text
-RESEARCH_SSMD_UPSCALING.md
+RESEARCH_SSMD_UPSCALING_UPDATED.md
 ```
 
 ---
 
-## 3.4 Pipeline Completion
+## 3.7 Pipeline Finalization
 
-**Status:** Pending
+**Status:** In progress
 
-The remaining production work should complete the SSMD architecture following the SSDI reference pattern.
-
-Target structure:
+### Completed items
 
 ```text
-src/upscaling_app/
-├── upscaling/
-│   └── ssmd/
-│       ├── calibration/
-│       ├── io/
-│       │   ├── data.py
-│       │   └── persistence.py
-│       ├── physics/
-│       │   ├── derived_properties.py
-│       │   └── model.py
-│       ├── workflows/
-│       │   └── baseline.py
-│       ├── prediction.py
-│       ├── reporting.py
-│       ├── results.py
-│       └── versions.py
-│
-└── analysis/
-    └── ssmd/
-        ├── evaluation/
-        ├── io/
-        ├── metrics.py
-        ├── pipeline.py
-        ├── plotting.py
-        └── reporting.py
+- normalized SSMD data consumption;
+- treated / untreated pairing;
+- derived SSMD physics;
+- reconstructed SINTEF Equation 5;
+- reconstructed SINTEF Equation 6;
+- explicit SSMD model versions;
+- by-regime c,d regression;
+- global c,d regression;
+- experiment-level prediction tables;
+- result persistence;
+- model reporting;
+- separated analysis/ssmd workflow;
+- parity evaluation for presentation;
+- SSMD experimental-analysis workflow;
+- CLI dispatch for SSMD analysis.
 ```
 
-Remaining tasks:
+### Remaining items before Milestone 3 can be marked Completed
 
 ```text
-1. Freeze the reconstructed SINTEF baseline equations.
-2. Define explicit SSMD model versions.
-3. Produce experiment-level prediction tables.
-4. Persist SSMD results under data/results/.
-5. Add standard SSMD metrics and reporting.
-6. Separate modelling and statistical-analysis CLI workflows.
-7. Add predictive validation where scientifically meaningful.
-8. Remove temporary exploratory diagnostics from the production baseline.
-9. Document final reference outputs.
+- confirm final CLI surface and command naming;
+- finish standard SSMD analysis reporting organization;
+- decide and implement predictive validation where scientifically meaningful;
+- remove or isolate any remaining temporary exploratory diagnostics;
+- verify final persisted-output paths and schemas;
+- freeze final numerical reference outputs in documentation;
+- perform a final architecture / reproducibility check.
 ```
 
 ---
@@ -427,28 +484,14 @@ Milestone 3 should be marked **Completed** only when:
 - exploratory research code is separated from production code.
 ```
 
-At that point this document must be updated from:
-
-```text
-Status: In progress
-```
-
-to:
-
-```text
-Status: Completed
-```
-
-and the final architecture, model versions, reference metrics, persisted outputs, known limitations, and next milestone must be recorded.
+The project is close to these criteria, but predictive-validation scope and final CLI / reporting cleanup still need to be closed explicitly.
 
 ---
 
 ## Next Immediate Step
 
-Return to the reconstructed SINTEF baseline and finish the production SSMD pipeline before continuing development of a new full-scale SSMD correlation.
+For the current presentation, the SSMD section is considered closed.
 
-The exploratory findings obtained during reconstruction are preserved separately in:
+The next scientific workflow to reconstruct is the droplet-size distribution pipeline.
 
-```text
-RESEARCH_SSMD_UPSCALING.md
-```
+Before introducing structural changes, inspect the normalized `distributions.xlsx` database and the existing distribution-related source files.

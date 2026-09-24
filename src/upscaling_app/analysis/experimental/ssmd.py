@@ -2,26 +2,92 @@ from __future__ import annotations
 
 import pandas as pd
 
-from upscaling_app.analysis.experimental.treatment_effect import (
-    build_treatment_effects,
+from upscaling_app.upscaling.ssmd.physics.derived_properties import (
+    add_derived_properties,
 )
+
+# ============================================================
+# Data preparation
+# ============================================================
 
 
 def prepare_ssmd_experimental_data(
     data: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Build the paired SSMD experimental dataset.
-
-    Each SSMD experiment is paired with the corresponding untreated
-    experiment through the treatment-effect preparation layer.
+    Build the paired SSMD experimental dataset using the same
+    physical preprocessing as the production SSMD pipeline.
     """
 
-    effects = build_treatment_effects(data)
+    ssmd = data.loc[data["dispersion_kind"] == "SSMD"].copy()
 
-    ssmd = effects.loc[effects["dispersion_kind"] == "SSMD"].copy()
+    untreated_columns = [
+        "oil_id",
+        "nozzle_diameter",
+        "has_gas",
+        "measured_d50",
+        "ift",
+        "oil_flow",
+        "gas_flow",
+        "oil_density",
+        "gas_density",
+    ]
 
-    ssmd["dR_measured"] = ssmd["d50_ratio"]
+    untreated = (
+        data.loc[
+            data["dispersion_kind"] == "Untreated",
+            untreated_columns,
+        ]
+        .rename(
+            columns={
+                "measured_d50": "untreated_d50_measured",
+                "ift": "untreated_ift",
+                "oil_flow": "untreated_oil_flow",
+                "gas_flow": "untreated_gas_flow",
+                "oil_density": "untreated_oil_density",
+                "gas_density": "untreated_gas_density",
+            }
+        )
+        .copy()
+    )
+
+    ssmd = ssmd.merge(
+        untreated,
+        on=[
+            "oil_id",
+            "nozzle_diameter",
+            "has_gas",
+        ],
+        how="left",
+        validate="many_to_one",
+    )
+
+    required = [
+        "untreated_d50_measured",
+        "untreated_ift",
+        "untreated_oil_flow",
+        "untreated_gas_flow",
+        "untreated_oil_density",
+        "untreated_gas_density",
+    ]
+
+    if ssmd[required].isna().any().any():
+        missing = ssmd[required].isna().sum()
+
+        missing = missing.loc[missing > 0]
+
+        raise ValueError(
+            "Missing untreated SSMD reference data:\n" f"{missing.to_string()}"
+        )
+
+    # Same preprocessing used by the SSMD production model.
+    ssmd = add_derived_properties(ssmd)
+
+    ssmd["d50_ratio"] = ssmd["dR_measured"]
+
+    ssmd["d50_reduction"] = ssmd["untreated_d50_measured"] - ssmd["measured_d50"]
+
+    ssmd["d50_reduction_pct"] = 100.0 * (1.0 - ssmd["dR_measured"])
 
     ssmd["water_jet_pct"] = 100.0 * ssmd["water_jet_fraction"]
 
@@ -35,6 +101,21 @@ def prepare_ssmd_experimental_data(
         )
     ]
 
+    ssmd["viscosity_ift_ratio"] = ssmd["oil_viscosity"] / ssmd["untreated_ift"]
+
+    ssmd["reference_eta"] = ssmd["has_gas"].map(
+        {
+            False: 0.85,
+            True: 0.6779545878291601,
+        }
+    )
+
+    ssmd["hydrodynamic_dR"] = (
+        ssmd["reference_eta"] * ssmd["momentum_amplification"]
+    ) ** (-3.0 / 5.0)
+
+    ssmd["property_correction_ratio"] = ssmd["dR_measured"] / ssmd["hydrodynamic_dR"]
+
     return ssmd.sort_values(
         [
             "nozzle_diameter_mm",
@@ -45,13 +126,14 @@ def prepare_ssmd_experimental_data(
     ).reset_index(drop=True)
 
 
+# ============================================================
+# Descriptive summaries
+# ============================================================
+
+
 def summarize_ssmd_by_regime(
     data: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Summarize the measured SSMD response within each release regime.
-    """
-
     return (
         data.groupby(
             "regime",
@@ -103,11 +185,6 @@ def summarize_ssmd_by_regime(
 def summarize_ssmd_by_fraction_and_regime(
     data: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Summarize the water-jet response while keeping release regimes
-    separated.
-    """
-
     return (
         data.groupby(
             [
@@ -147,13 +224,21 @@ def summarize_ssmd_by_fraction_and_regime(
                 "dR_measured",
                 lambda x: x.quantile(0.75),
             ),
-            mean_reduction_pct=(
+            q1_reduction_pct=(
                 "d50_reduction_pct",
-                "mean",
+                lambda x: x.quantile(0.25),
             ),
             median_reduction_pct=(
                 "d50_reduction_pct",
                 "median",
+            ),
+            q3_reduction_pct=(
+                "d50_reduction_pct",
+                lambda x: x.quantile(0.75),
+            ),
+            mean_reduction_pct=(
+                "d50_reduction_pct",
+                "mean",
             ),
         )
         .sort_values(
@@ -166,14 +251,240 @@ def summarize_ssmd_by_fraction_and_regime(
     )
 
 
-def summarize_ssmd_monotonicity(
+# ============================================================
+# Water-jet screening
+# ============================================================
+
+
+def build_ssmd_spearman_summary(
+    data: pd.DataFrame,
+) -> pd.DataFrame:
+    records = []
+
+    for regime, group in data.groupby(
+        "regime",
+        sort=False,
+    ):
+        rho = group["water_jet_fraction"].corr(
+            group["dR_measured"],
+            method="spearman",
+        )
+
+        records.append(
+            {
+                "regime": regime,
+                "n": len(group),
+                "n_oils": group["oil_id"].nunique(),
+                "spearman_rho": rho,
+                "abs_spearman_rho": abs(rho),
+            }
+        )
+
+    return (
+        pd.DataFrame(records)
+        .sort_values(
+            "abs_spearman_rho",
+            ascending=False,
+        )
+        .reset_index(drop=True)
+    )
+
+
+# ============================================================
+# SINTEF physical screening
+# ============================================================
+
+
+def build_ssmd_hydrodynamic_spearman_summary(
     data: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Check whether d50 reduction increases monotonically with
-    water-jet fraction for each oil within each release regime.
+    Screen the experimental dR response against SINTEF momentum
+    amplification within each release regime.
     """
 
+    records = []
+
+    for regime, group in data.groupby(
+        "regime",
+        sort=False,
+    ):
+        rho = group["momentum_amplification"].corr(
+            group["dR_measured"],
+            method="spearman",
+        )
+
+        records.append(
+            {
+                "regime": regime,
+                "variable": "momentum_amplification",
+                "n": len(group),
+                "n_oils": group["oil_id"].nunique(),
+                "spearman_rho": rho,
+                "abs_spearman_rho": abs(rho),
+            }
+        )
+
+    return (
+        pd.DataFrame(records)
+        .sort_values(
+            "abs_spearman_rho",
+            ascending=False,
+        )
+        .reset_index(drop=True)
+    )
+
+
+def build_ssmd_property_spearman_summary(
+    data: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Screen oil-property associations with dR.
+
+    One representative value per oil and regime is used to avoid
+    treating the three water-jet levels as independent oil-property
+    observations.
+    """
+
+    variables = [
+        "oil_viscosity",
+        "untreated_ift",
+        "viscosity_ift_ratio",
+    ]
+
+    oil_summary = data.groupby(
+        [
+            "regime",
+            "oil_id",
+        ],
+        as_index=False,
+        sort=False,
+    ).agg(
+        dR_measured=(
+            "dR_measured",
+            "median",
+        ),
+        oil_viscosity=(
+            "oil_viscosity",
+            "median",
+        ),
+        untreated_ift=(
+            "untreated_ift",
+            "median",
+        ),
+        viscosity_ift_ratio=(
+            "viscosity_ift_ratio",
+            "median",
+        ),
+    )
+
+    records = []
+
+    for regime, group in oil_summary.groupby(
+        "regime",
+        sort=False,
+    ):
+        for variable in variables:
+            rho = group[variable].corr(
+                group["dR_measured"],
+                method="spearman",
+            )
+
+            records.append(
+                {
+                    "regime": regime,
+                    "variable": variable,
+                    "n_oils": len(group),
+                    "spearman_rho": rho,
+                    "abs_spearman_rho": abs(rho),
+                }
+            )
+
+    return (
+        pd.DataFrame(records)
+        .sort_values(
+            [
+                "regime",
+                "abs_spearman_rho",
+            ],
+            ascending=[
+                True,
+                False,
+            ],
+        )
+        .reset_index(drop=True)
+    )
+
+
+def build_ssmd_property_correction_summary(
+    data: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Evaluate the oil-property structure remaining after removing the
+    reference SINTEF Equation-5 hydrodynamic contribution.
+
+    Equation 6 suggests:
+
+        dR / (eta * A_M)^(-3/5)
+            ~ c + d * mu / sigma
+    """
+
+    oil_summary = data.groupby(
+        [
+            "regime",
+            "oil_id",
+        ],
+        as_index=False,
+        sort=False,
+    ).agg(
+        property_correction_ratio=(
+            "property_correction_ratio",
+            "median",
+        ),
+        viscosity_ift_ratio=(
+            "viscosity_ift_ratio",
+            "median",
+        ),
+    )
+
+    records = []
+
+    for regime, group in oil_summary.groupby(
+        "regime",
+        sort=False,
+    ):
+        rho = group["viscosity_ift_ratio"].corr(
+            group["property_correction_ratio"],
+            method="spearman",
+        )
+
+        records.append(
+            {
+                "regime": regime,
+                "n_oils": len(group),
+                "spearman_rho": rho,
+                "abs_spearman_rho": abs(rho),
+            }
+        )
+
+    return (
+        pd.DataFrame(records)
+        .sort_values(
+            "abs_spearman_rho",
+            ascending=False,
+        )
+        .reset_index(drop=True)
+    )
+
+
+# ============================================================
+# Monotonicity
+# ============================================================
+
+
+def summarize_ssmd_monotonicity(
+    data: pd.DataFrame,
+) -> pd.DataFrame:
     records = []
 
     for (regime, oil_id), group in data.groupby(
@@ -214,10 +525,6 @@ def summarize_ssmd_monotonicity(
 def summarize_ssmd_monotonicity_by_regime(
     monotonicity: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Aggregate oil-level monotonicity results by release regime.
-    """
-
     summary = monotonicity.groupby(
         "regime",
         as_index=False,
@@ -238,17 +545,14 @@ def summarize_ssmd_monotonicity_by_regime(
     return summary.reset_index(drop=True)
 
 
+# ============================================================
+# Gas / no-gas comparison
+# ============================================================
+
+
 def build_ssmd_gas_comparison(
     data: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Pair 2 mm gas and no-gas SSMD experiments for the same oil
-    and nominal water-jet fraction.
-
-    This comparison isolates the gas/no-gas contrast while keeping
-    the oil-nozzle diameter and nominal treatment level fixed.
-    """
-
     two_mm = data.loc[data["nozzle_diameter_mm"] == 2].copy()
 
     no_gas = two_mm.loc[
@@ -309,11 +613,6 @@ def build_ssmd_gas_comparison(
 def summarize_ssmd_gas_comparison(
     comparison: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Summarize the paired 2 mm gas/no-gas comparison by
-    water-jet fraction.
-    """
-
     return (
         comparison.groupby(
             [
@@ -345,47 +644,5 @@ def summarize_ssmd_gas_comparison(
             ),
         )
         .sort_values("water_jet_fraction")
-        .reset_index(drop=True)
-    )
-
-
-def build_ssmd_spearman_summary(
-    data: pd.DataFrame,
-) -> pd.DataFrame:
-    """
-    Evaluate the monotonic association between water-jet fraction
-    and measured dR within each SSMD release regime.
-
-    The result is descriptive because observations from the same oil
-    are repeated across water-jet levels.
-    """
-
-    records = []
-
-    for regime, group in data.groupby(
-        "regime",
-        sort=False,
-    ):
-        rho = group["water_jet_fraction"].corr(
-            group["dR_measured"],
-            method="spearman",
-        )
-
-        records.append(
-            {
-                "regime": regime,
-                "n": len(group),
-                "n_oils": group["oil_id"].nunique(),
-                "spearman_rho": rho,
-                "abs_spearman_rho": abs(rho),
-            }
-        )
-
-    return (
-        pd.DataFrame(records)
-        .sort_values(
-            "abs_spearman_rho",
-            ascending=False,
-        )
         .reset_index(drop=True)
     )

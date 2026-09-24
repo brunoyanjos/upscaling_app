@@ -1,14 +1,15 @@
 # Upscaling App
 
-Scientific Python application for the analysis and modelling of oil dispersion experiments.
+Scientific Python application for oil-dispersion modelling, parameter estimation, prediction, and statistical analysis.
 
-The project currently focuses on:
+The project currently covers:
 
-- SSDI modelling;
-- SSMD modelling;
-- droplet-size distribution analysis;
-- parameter estimation using JAX;
-- statistical analysis and model validation.
+- normalized experimental databases;
+- SSDI modelling and validation;
+- SSMD modelling and evaluation;
+- experimental-data analysis;
+- droplet-size distribution data and upcoming distribution modelling;
+- JAX-based parameter estimation where applicable.
 
 ## Project structure
 
@@ -17,14 +18,20 @@ upscaling_app/
 ├── configs/
 ├── data/
 │   ├── raw/
-│   └── database/
+│   ├── database/
+│   └── results/
 ├── docs/
 ├── src/
 │   └── upscaling_app/
 │       ├── analysis/
+│       │   ├── experimental/
+│       │   ├── ssdi/
+│       │   └── ssmd/
 │       ├── database/
-│       ├── models/
 │       ├── upscaling/
+│       │   ├── ssdi/
+│       │   ├── ssmd/
+│       │   └── distributions/
 │       ├── cli.py
 │       └── paths.py
 ├── pyproject.toml
@@ -33,33 +40,23 @@ upscaling_app/
 
 ## Installation
 
-Install the project in editable mode:
+Install the package in editable mode:
 
 ```bash
 pip install -e .
 ```
 
-## Command-line interface
-
-The application is executed through:
+The project-wide CLI entry point is:
 
 ```bash
 upscaling
 ```
 
-Available workflows will include:
+## Architecture
 
-```bash
-upscaling database build
-upscaling ssdi --config <config.toml>
-upscaling ssmd --config <config.toml>
-upscaling distribution --config <config.toml>
-upscaling analyze --config <config.toml>
-```
+Raw experimental spreadsheets are processed only by the database layer.
 
-## Database architecture
-
-Raw experimental data are converted into normalized databases:
+Scientific workflows consume normalized databases:
 
 ```text
 oil_properties
@@ -73,7 +70,7 @@ experiments
 distributions
 ```
 
-The current databases are:
+Current normalized databases:
 
 ```text
 data/database/
@@ -82,9 +79,17 @@ data/database/
 └── distributions.xlsx
 ```
 
-`experiment_id` provides the link between experimental conditions and droplet-size distributions.
+`experiment_id` is deterministic and provides the relationship between experimental conditions and measured droplet-size distributions.
 
-Experimental identifiers are deterministic so that database reconstruction preserves relationships between datasets.
+## Core design rules
+
+1. Raw spreadsheets are parsed only in the database layer.
+2. Modelling pipelines consume normalized databases.
+3. Internal physical units use SI whenever applicable.
+4. `experiment_id` remains deterministic across database rebuilds.
+5. Data ingestion, physics, calibration, prediction, persistence, and statistical analysis remain separated.
+6. Exploratory correlation development must not silently replace validated production references.
+7. Reusable scientific logic belongs under `src/upscaling_app/`.
 
 ## Units
 
@@ -92,27 +97,120 @@ Processed databases use SI units whenever applicable.
 
 Examples:
 
-- density: kg/m³
-- viscosity: Pa·s
-- diameter: m
-- volumetric flow rate: m³/s
-- interfacial tension: N/m
-- fractions: dimensionless
+```text
+density              kg/m³
+dynamic viscosity    Pa·s
+diameter             m
+volumetric flow      m³/s
+interfacial tension  N/m
+fractions             dimensionless
+```
 
-## Current development status
+## Current workflows
 
-### Milestone 1 — Data architecture and CLI foundation
+The CLI is the application entry point for database, modelling, and analysis workflows.
 
-Current work includes:
+Examples currently used in the project include:
 
-- Python package structure using `src/`;
-- command-line interface;
-- normalization of raw SINTEF data;
-- oil-property database;
-- experiment database;
-- droplet-size distribution database;
-- deterministic relationships between experimental data.
+```bash
+upscaling database build
+upscaling analyze experimental descriptive
+upscaling analyze experimental ssdi
+upscaling analyze experimental ssmd
+upscaling analyze experimental treatment-effect
+upscaling analyze ssmd
+```
 
-### Next milestone
+Production SSDI and SSMD workflows are also exposed through the project CLI according to the current implementation.
 
-Milestone 2 will reconstruct the SSDI modelling pipeline using the new database architecture.
+## Development status
+
+### Milestone 1 — Data Architecture and CLI Foundation
+
+**Status: Completed**
+
+Completed work includes:
+
+- `src/` package architecture;
+- normalized database builders;
+- deterministic experiment identifiers;
+- SI normalization;
+- project-wide CLI foundation.
+
+### Milestone 2 — SSDI Pipeline Reconstruction
+
+**Status: Completed**
+
+The SSDI workflow now separates:
+
+```text
+data selection
+physics
+calibration
+prediction
+persistence
+statistical analysis
+predictive validation
+```
+
+The reconstructed SSDI reference and recalibrated models are evaluated independently from the calibration workflow.
+
+### Milestone 3 — SSMD Pipeline Reconstruction
+
+**Status: In progress — finalization stage**
+
+Current SSMD capabilities include:
+
+- normalized 90-experiment / 10-oil calibration dataset;
+- untreated-release and water-jet derived physics;
+- reconstructed SINTEF Equation 5 and Equation 6;
+- explicit model versions;
+- by-regime and global `c,d` regression;
+- persisted experiment-level predictions;
+- SSMD reporting;
+- separate experimental and model-analysis workflows;
+- parity evaluation used in the current presentation.
+
+Reference SSMD results:
+
+```text
+Equation 5 — SINTEF
+Log-MSE = 0.716712
+
+Equation 6 — SINTEF
+Log-MSE = 0.128723
+
+Global regressed c,d
+Log-MSE ≈ 0.116
+R²_log  ≈ 0.548
+```
+
+The global `c,d` model reduces Log-MSE by approximately 10.1% relative to the reconstructed SINTEF Equation-6 reference while replacing regime-specific `c,d` values with one global pair. `eta` remains gas-condition dependent.
+
+## Next scientific workflow — droplet-size distributions
+
+The normalized distribution database already exists:
+
+```text
+experiment_id
+droplet_diameter
+volume_fraction
+```
+
+The next development step is to reconstruct the droplet-size distribution modelling pipeline on top of this database while preserving the same architecture used for SSDI and SSMD:
+
+```text
+data selection
+        ↓
+distribution model / physics
+        ↓
+parameter estimation
+        ↓
+prediction
+        ↓
+persistence
+        ↓
+statistical evaluation
+```
+
+Before structural changes are introduced, consult the existing distribution-related source files and project documentation.
