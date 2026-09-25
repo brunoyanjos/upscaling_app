@@ -9,6 +9,7 @@ def plot_distribution_d50_check(
     distribution: pd.DataFrame,
     measured_d50: float,
     calculated_d50: float,
+    d_peak: float,
     title: str,
     output_path: Path,
 ) -> None:
@@ -59,6 +60,18 @@ def plot_distribution_d50_check(
         calculated_d50 * 1e3,
         linestyle=":",
         label="Calculated D50",
+    )
+
+    ax_dist.axvline(
+        d_peak * 1e3,
+        linestyle="-.",
+        label="Dpeak",
+    )
+
+    ax_cdf.axvline(
+        d_peak * 1e3,
+        linestyle="-.",
+        label="Dpeak",
     )
 
     ax_dist.set_ylabel("Volume fraction")
@@ -152,7 +165,9 @@ def plot_suspicious_distributions(
         title = (
             f"Oil {oil_id} | {tag} | "
             f"{nozzle_mm:.0f} mm | {gas}\n"
-            f"D50 error = {error_pct:+.1f}%"
+            f"D50 measured = {case['measured_d50'] * 1e3:.3f} mm | "
+            f"D50 calc = {case['d50'] * 1e3:.3f} mm | "
+            f"Dpeak = {case['d_peak'] * 1e3:.3f} mm"
         )
 
         filename = f"{oil_id}_" f"{tag}_" f"{nozzle_mm:.0f}mm_" f"{gas}.png"
@@ -163,6 +178,7 @@ def plot_suspicious_distributions(
             distribution=distribution,
             measured_d50=case["measured_d50"],
             calculated_d50=case["d50"],
+            d_peak=case["d_peak"],
             title=title,
             output_path=output_dir / filename,
         )

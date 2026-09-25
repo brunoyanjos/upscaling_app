@@ -9,6 +9,7 @@ import pandas as pd
 from upscaling_app.plotting.style import (
     APPLE_COLORS,
     APPLE_GRAYS,
+    PRESENTATION_COLORS,
     apply_plot_style,
 )
 from upscaling_app.upscaling.ssmd.versions import (
@@ -114,7 +115,7 @@ def save_ssmd_parity_plot(
     ax.scatter(
         model_data["dR_exp"],
         model_data["dR_pred"],
-        color=APPLE_COLORS["blue"],
+        color=PRESENTATION_COLORS["Azul"],
         alpha=0.70,
         zorder=3,
     )
@@ -122,7 +123,7 @@ def save_ssmd_parity_plot(
     ax.plot(
         limits,
         limits,
-        color=APPLE_GRAYS["gray"],
+        color=PRESENTATION_COLORS["Cinza"],
         linestyle="--",
         linewidth=2.0,
         label=r"$y=x$",

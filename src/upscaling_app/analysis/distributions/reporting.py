@@ -21,6 +21,10 @@ def print_distribution_analysis_report(
         }
     )
 
+    comparison["d_peak_mm"] = comparison["d_peak"] * 1e3
+
+    comparison["d_peak_error_pct"] = comparison["d_peak_relative_error"] * 100.0
+
     comparison = comparison.sort_values(
         [
             "oil_id",
@@ -42,7 +46,8 @@ def print_distribution_analysis_report(
                 "measured_d50_mm",
                 "distribution_d50_mm",
                 "error_pct",
-                "source_sheet",
+                "d_peak_mm",
+                "d_peak_error_pct",
             ]
         ].to_string(
             index=False,
@@ -51,6 +56,8 @@ def print_distribution_analysis_report(
                 "measured_d50_mm": "{:.4f}".format,
                 "distribution_d50_mm": "{:.4f}".format,
                 "error_pct": "{:+.2f}".format,
+                "d_peak_mm": "{:.4f}".format,
+                "d_peak_error_pct": "{:+.2f}".format,
             },
         )
     )
@@ -58,7 +65,8 @@ def print_distribution_analysis_report(
     suspects = comparison.loc[comparison["d50_relative_error"].abs() > 0.05]
 
     print("\nSUSPICIOUS D50 CASES")
-    print("=" * 100)
+
+    print("=" * 120)
 
     print(
         suspects[
@@ -70,7 +78,19 @@ def print_distribution_analysis_report(
                 "measured_d50_mm",
                 "distribution_d50_mm",
                 "error_pct",
+                "d_peak_mm",
+                "d_peak_error_pct",
                 "source_sheet",
             ]
-        ].to_string(index=False)
+        ].to_string(
+            index=False,
+            formatters={
+                "nozzle_mm": "{:.1f}".format,
+                "measured_d50_mm": "{:.4f}".format,
+                "distribution_d50_mm": "{:.4f}".format,
+                "error_pct": "{:+.2f}".format,
+                "d_peak_mm": "{:.4f}".format,
+                "d_peak_error_pct": "{:+.2f}".format,
+            },
+        )
     )

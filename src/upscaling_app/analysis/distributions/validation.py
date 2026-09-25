@@ -13,6 +13,7 @@ def compare_distribution_d50(
         [
             "experiment_id",
             "d50",
+            "d_peak",
         ]
     ].merge(
         experiments[
@@ -36,5 +37,9 @@ def compare_distribution_d50(
     comparison["d50_relative_error"] = (
         comparison["d50_error"] / comparison["measured_d50"]
     )
+
+    comparison["d_peak_relative_error"] = (
+        comparison["d_peak"] - comparison["measured_d50"]
+    ) / comparison["measured_d50"]
 
     return comparison

@@ -14,8 +14,8 @@ from upscaling_app.plotting.style import (
 )
 
 REGIME_COLORS = {
-    "Untreated": APPLE_COLORS["blue"],
-    "SSDI": APPLE_COLORS["red"],
+    "Untreated": PRESENTATION_COLORS["Azul"],
+    "SSDI": PRESENTATION_COLORS["Laranja"],
 }
 
 
@@ -63,7 +63,7 @@ def save_experimental_relation_plot(
             group["d50_D"],
             color=REGIME_COLORS.get(
                 kind,
-                APPLE_GRAYS["gray"],
+                PRESENTATION_COLORS["Cinza"],
             ),
             label=kind,
             alpha=0.75,
@@ -80,7 +80,7 @@ def save_experimental_relation_plot(
     ax.plot(
         x_fit,
         y_fit,
-        color=APPLE_GRAYS["gray"],
+        color=PRESENTATION_COLORS["Cinza"],
         linestyle="--",
         label="Log-log fit",
     )
@@ -610,12 +610,12 @@ def save_ssdi_spearman_plot(
     ax.barh(
         y_labels,
         data["spearman_rho"],
-        color=APPLE_COLORS["blue"],
+        color=PRESENTATION_COLORS["Azul"],
     )
 
     ax.axvline(
         0.0,
-        color=APPLE_GRAYS["gray"],
+        color=PRESENTATION_COLORS["Cinza"],
         linestyle="--",
     )
 
@@ -868,9 +868,9 @@ def save_ssmd_momentum_spearman_plot(
     ]
 
     colors = {
-        "2 mm — no gas": APPLE_COLORS["blue"],
-        "3 mm — no gas": APPLE_GRAYS["gray"],
-        "2 mm — gas": APPLE_COLORS["red"],
+        "2 mm — no gas": PRESENTATION_COLORS["Azul"],
+        "3 mm — no gas": PRESENTATION_COLORS["Verde"],
+        "2 mm — gas": PRESENTATION_COLORS["Laranja"],
     }
 
     data = summary.set_index("regime").loc[regime_order].reset_index()
@@ -891,7 +891,7 @@ def save_ssmd_momentum_spearman_plot(
 
     ax.axvline(
         0.0,
-        color=APPLE_GRAYS["gray"],
+        color=PRESENTATION_COLORS["Cinza"],
         linestyle="--",
     )
 
@@ -902,13 +902,20 @@ def save_ssmd_momentum_spearman_plot(
             f"{value:.2f}",
             va="center",
             ha="right",
+            fontsize=18,
         )
 
     ax.set_yticks(y)
 
-    ax.set_yticklabels(data["regime"])
+    ax.set_yticklabels(
+        data["regime"],
+        fontsize=16,
+    )
 
-    ax.set_xlabel(r"Spearman correlation with $d_R$, $\rho_s$")
+    ax.set_xlabel(
+        r"Spearman correlation with $d_R$, $\rho_s$",
+        fontsize=16,
+    )
 
     ax.set_xlim(
         -1.0,
@@ -950,9 +957,9 @@ def save_ssmd_momentum_response_plot(
     ]
 
     colors = {
-        "2 mm — no gas": APPLE_COLORS["blue"],
-        "3 mm — no gas": APPLE_GRAYS["gray"],
-        "2 mm — gas": APPLE_COLORS["red"],
+        "2 mm — no gas": PRESENTATION_COLORS["Azul"],
+        "3 mm — no gas": PRESENTATION_COLORS["Verde"],
+        "2 mm — gas": PRESENTATION_COLORS["Laranja"],
     }
 
     fig, ax = plt.subplots(
@@ -1059,9 +1066,9 @@ def save_ssmd_global_momentum_response_plot(
     )
 
     colors = {
-        "2 mm — no gas": APPLE_COLORS["blue"],
-        "3 mm — no gas": APPLE_GRAYS["gray"],
-        "2 mm — gas": APPLE_COLORS["red"],
+        "2 mm — no gas": PRESENTATION_COLORS["Azul"],
+        "3 mm — no gas": PRESENTATION_COLORS["Verde"],
+        "2 mm — gas": PRESENTATION_COLORS["Laranja"],
     }
 
     valid = (

@@ -49,6 +49,7 @@ def summarize_distribution(
     distribution = distribution.sort_values("droplet_diameter")
 
     diameter = distribution["droplet_diameter"].to_numpy(dtype=float)
+
     fraction = distribution["volume_fraction"].to_numpy(dtype=float)
 
     total_fraction = fraction.sum()
@@ -82,7 +83,7 @@ def summarize_distribution(
         0.90,
     )
 
-    mode = diameter[np.argmax(fraction)]
+    d_peak = diameter[np.argmax(fraction)]
 
     span = (d90 - d10) / d50
 
@@ -91,9 +92,9 @@ def summarize_distribution(
             "d10": d10,
             "d50": d50,
             "d90": d90,
+            "d_peak": d_peak,
             "mean_diameter": mean,
             "std_diameter": std,
-            "mode_diameter": mode,
             "span": span,
             "volume_fraction_sum": total_fraction,
         }
@@ -122,9 +123,9 @@ def summarize_distributions(
         "d10",
         "d50",
         "d90",
+        "d_peak",
         "mean_diameter",
         "std_diameter",
-        "mode_diameter",
         "span",
         "volume_fraction_sum",
     ]
