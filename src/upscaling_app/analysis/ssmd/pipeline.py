@@ -7,7 +7,7 @@ from upscaling_app import paths
 from upscaling_app.analysis.experimental.data import (
     load_experiments,
 )
-from upscaling_app.analysis.experimental.ssmd import (
+from upscaling_app.analysis.experimental.ssmd.analysis import (
     prepare_ssmd_experimental_data,
 )
 from upscaling_app.analysis.ssmd.plotting import (

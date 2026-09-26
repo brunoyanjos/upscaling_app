@@ -9,7 +9,7 @@ def load_experiments() -> pd.DataFrame:
     return pd.read_excel(paths.EXPERIMENTS_DATABASE)
 
 
-def select_experiments(
+def filter_by_dispersion(
     data: pd.DataFrame,
     dispersion_kind: str | None = None,
 ) -> pd.DataFrame:

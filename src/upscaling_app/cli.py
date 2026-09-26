@@ -4,6 +4,8 @@ import argparse
 import os
 from pathlib import Path
 
+import argcomplete
+
 
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -168,9 +170,15 @@ def create_parser() -> argparse.ArgumentParser:
         required=True,
     )
 
-    experimental_subparsers.add_parser(
-        "descriptive",
+    summary_parser = experimental_subparsers.add_parser(
+        "summary",
+        aliases=["descriptive"],
         help="Run descriptive experimental analysis.",
+    )
+    summary_parser.add_argument(
+        "--kind",
+        choices=["all", "untreated", "ssdi", "ssmd"],
+        default="all",
     )
 
     experimental_subparsers.add_parser(
@@ -193,16 +201,14 @@ def create_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     parser = create_parser()
+    argcomplete.autocomplete(parser)
     args = parser.parse_args()
 
     # =========================================================
     # Runtime configuration
     # =========================================================
 
-    if args.command == "ssdi" or (
-        args.command == "analyze" and args.analysis_command == "ssdi"
-    ):
-        os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+    os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 
     # =========================================================
     # Database
@@ -402,6 +408,10 @@ def main() -> None:
             # SSMD analysis
             # -----------------------------------------------------
 
+        # -----------------------------------------------------
+        # Distributions analysis
+        # -----------------------------------------------------
+
         elif args.analysis_command == "distributions":
             from upscaling_app.analysis.distributions.pipeline import (
                 run_distribution_analysis,
@@ -414,61 +424,41 @@ def main() -> None:
 
             print_distribution_analysis_report(result)
 
-        # ============================================================
+        # -----------------------------------------------------
         # Experimental analysis
-        # ============================================================
+        # -----------------------------------------------------
 
         elif args.analysis_command == "experimental":
 
             if args.experimental_command == "summary":
-                from upscaling_app.analysis.experimental.pipeline import (
-                    run_experimental_analysis,
-                )
-                from upscaling_app.analysis.experimental.reporting import (
-                    print_experimental_analysis_report,
+                from upscaling_app.analysis.experimental.summary.pipeline import (
+                    run_experimental_summary_workflow,
                 )
 
-                result = run_experimental_analysis(
+                result = run_experimental_summary_workflow(
                     kind=args.kind,
                 )
 
-                print_experimental_analysis_report(result)
+            elif args.experimental_command == "treatment-effect":
+                from upscaling_app.analysis.experimental.treatment_effect.pipeline import (
+                    run_treatment_effect_workflow,
+                )
+
+                run_treatment_effect_workflow()
 
             elif args.experimental_command == "ssdi":
-                from upscaling_app.analysis.experimental.pipeline import (
-                    run_ssdi_experimental_analysis,
-                )
-                from upscaling_app.analysis.experimental.reporting import (
-                    print_ssdi_experimental_report,
+                from upscaling_app.analysis.experimental.ssdi.pipeline import (
+                    run_ssdi_experimental_workflow,
                 )
 
-                result = run_ssdi_experimental_analysis()
-
-                print_ssdi_experimental_report(result)
+                run_ssdi_experimental_workflow()
 
             elif args.experimental_command == "ssmd":
-                from upscaling_app.analysis.experimental.pipeline import (
-                    run_ssmd_experimental_analysis,
-                )
-                from upscaling_app.analysis.experimental.reporting import (
-                    print_ssmd_experimental_report,
+                from upscaling_app.analysis.experimental.ssmd.pipeline import (
+                    run_ssmd_experimental_workflow,
                 )
 
-                result = run_ssmd_experimental_analysis()
-
-                print_ssmd_experimental_report(result)
-
-            elif args.experimental_command == "treatment-effect":
-                from upscaling_app.analysis.experimental.pipeline import (
-                    run_treatment_effect_analysis,
-                )
-                from upscaling_app.analysis.experimental.reporting import (
-                    print_treatment_effect_report,
-                )
-
-                result = run_treatment_effect_analysis()
-
-                print_treatment_effect_report(result)
+                run_ssmd_experimental_workflow()
 
 
 if __name__ == "__main__":
