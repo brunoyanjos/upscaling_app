@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
 import jax.numpy as jnp
-import numpy as np
 import pandas as pd
 
 from upscaling_app.analysis.ssdi.metrics import (
@@ -72,8 +71,6 @@ def run_leave_one_oil_out() -> LeaveOneOilOutResult:
         predictions = add_point_metrics(predictions)
         metrics = calculate_global_metrics(predictions)
 
-        test_log_mse = float(np.mean(predictions["log_residual"] ** 2))
-
         fold_rows.append(
             {
                 "held_out_oil": held_out_oil,
@@ -82,7 +79,7 @@ def run_leave_one_oil_out() -> LeaveOneOilOutResult:
                 "a": calibration.a_optimized,
                 "b": calibration.b_optimized,
                 "train_log_mse": calibration.loss,
-                "test_log_mse": test_log_mse,
+                "test_log_mse": metrics["log_mse"],
                 "r2": metrics["r2"],
                 "rmse": metrics["rmse"],
                 "mape": metrics["mape"],
@@ -104,7 +101,7 @@ def run_leave_one_oil_out() -> LeaveOneOilOutResult:
 
     global_metrics = {
         "n": len(pooled_predictions),
-        "log_mse": float(np.mean(pooled_predictions["log_residual"] ** 2)),
+        "log_mse": pooled_metrics["log_mse"],
         "r2": pooled_metrics["r2"],
         "rmse": pooled_metrics["rmse"],
         "mape": pooled_metrics["mape"],

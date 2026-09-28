@@ -228,6 +228,7 @@ The current production SSMD package defines:
 sintef_baseline
 regressed_cd_baseline
 regressed_cd_global
+regressed_oil_wise
 ```
 
 ### `sintef_baseline`
@@ -285,6 +286,37 @@ The global regression is therefore an upscaling-oriented simplification, not a c
 
 ---
 
+### `regressed_oil_wise`
+
+An oil-wise diagnostic was added after the global `c,d` regression. The local workflow preserves the same SINTEF Equation-6 structure and the existing gas-dependent `eta` treatment, but it does not fit independent `c_i,d_i` pairs.
+
+For a fixed oil, the property ratio `mu/sigma` is effectively oil-specific, so `c` and `d` are not independently identifiable from the local data. The identifiable local factor is therefore written as:
+
+```text
+k_i = c + d mu_i/sigma_i
+```
+
+and the local response becomes:
+
+```text
+dR = (eta A_M)^(-3/5) * k_i
+```
+
+This preserves the physical structure while avoiding arbitrary decomposition of one identifiable factor into two poorly identified local coefficients.
+
+Current overall in-sample comparison:
+
+```text
+model        n    Log-MSE    R²        RMSE       MAPE [%]    mean log residual
+reference    90   0.128723   0.436384   0.056085     33.82       -0.128787
+global       90   0.115841   0.570007   0.048987     30.08       -0.058151
+oil-wise     90   0.119372   0.515264   0.052012     31.39       -0.058035
+```
+
+Unlike SSDI, the SSMD oil-wise calibration does **not** improve the global regression. The global `c,d` model remains the strongest of the three current Equation-6 comparisons on the pooled in-sample dataset.
+
+This is treated as a scientific result rather than an implementation failure: the dominant unexplained SSMD variability is not removed simply by assigning one local oil-property factor to each oil.
+
 ## 3.4 Prediction and Persistence
 
 **Status:** Implemented
@@ -309,6 +341,13 @@ persist predictions
 
 Prediction outputs contain explicit `model_version` labels so that model analysis can consume persisted results without recalibrating inside the analysis layer.
 
+The oil-wise extension persists both experiment-level predictions and local calibration summaries:
+
+```text
+data/results/ssmd_results.xlsx
+data/results/ssmd_calibrations.xlsx
+```
+
 The final treated prediction convention remains:
 
 ```text
@@ -329,6 +368,7 @@ The `analysis/ssmd/` workflow currently supports model evaluation from persisted
 Equation 5 reference
 SINTEF Equation 6 reference
 regressed_cd_global
+regressed_oil_wise
 ```
 
 Current presentation reference metrics:
@@ -342,13 +382,31 @@ Log-MSE = 0.128723
 R²_log  ≈ 0.498
 
 Global regressed c,d
-Log-MSE ≈ 0.116
-R²_log  ≈ 0.548
+Log-MSE = 0.115841
+R²      = 0.570007
+RMSE    = 0.048987
+MAPE    = 30.08 %
+
+Oil-wise identifiable factor
+Log-MSE = 0.119372
+R²      = 0.515264
+RMSE    = 0.052012
+MAPE    = 31.39 %
 ```
 
 The experimental-analysis layer also contains SSMD-specific descriptive diagnostics, including regime-separated water-jet response, monotonicity, hydrodynamic screening, and property screening.
 
 These diagnostics are descriptive and must remain distinct from model calibration and predictive validation.
+
+The presentation workflow also compares `reference`, `global`, and `oil-wise` predictions overall and by the three experimental regimes:
+
+```text
+3 mm — no gas
+2 mm — no gas
+2 mm — gas
+```
+
+Generated presentation figures include a three-panel parity comparison and a regime-level Log-MSE comparison. RMSE is dimensionless in this analysis because the evaluated SSMD response is `dR`.
 
 ---
 
@@ -419,23 +477,29 @@ RESEARCH_SSMD_UPSCALING_UPDATED.md
 - explicit SSMD model versions;
 - by-regime c,d regression;
 - global c,d regression;
+- oil-wise identifiable-factor regression;
 - experiment-level prediction tables;
 - result persistence;
 - model reporting;
 - separated analysis/ssmd workflow;
 - parity evaluation for presentation;
+- global / oil-wise performance comparison;
+- regime-separated performance comparison;
 - SSMD experimental-analysis workflow;
-- CLI dispatch for SSMD analysis.
+- baseline CLI dispatch for SSMD analysis.
 ```
 
 ### Remaining items before Milestone 3 can be marked Completed
 
 ```text
+- expose the SSMD oil-wise modelling workflow through the CLI;
+- expose the SSMD oil-wise / presentation-performance analysis workflow through the CLI;
 - confirm final CLI surface and command naming;
 - finish standard SSMD analysis reporting organization;
 - decide and implement predictive validation where scientifically meaningful;
 - remove or isolate any remaining temporary exploratory diagnostics;
 - verify final persisted-output paths and schemas;
+- verify `versions.py` and final persisted-output schemas;
 - freeze final numerical reference outputs in documentation;
 - perform a final architecture / reproducibility check.
 ```

@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 
 from upscaling_app.analysis.ssdi.io.data import load_ssdi_results
@@ -29,12 +28,9 @@ def build_model_comparison() -> pd.DataFrame:
         results = load_ssdi_results(version)
 
         results = add_point_metrics(results)
-
         results = mark_iqr_outliers(results)
 
         metrics = calculate_global_metrics(results)
-
-        log_mse = float(np.mean(results["log_residual"] ** 2))
 
         rows.append(
             {
@@ -42,7 +38,7 @@ def build_model_comparison() -> pd.DataFrame:
                 "n": len(results),
                 "a": results["a_coef"].iloc[0],
                 "b": results["b_coef"].iloc[0],
-                "log_mse": log_mse,
+                "log_mse": metrics["log_mse"],
                 "r2": metrics["r2"],
                 "rmse": metrics["rmse"],
                 "mape": metrics["mape"],
@@ -60,19 +56,16 @@ def build_evaluation_comparison(
 
     for version in MODEL_VERSIONS:
         results = load_ssdi_results(version)
-
         results = add_point_metrics(results)
 
         metrics = calculate_global_metrics(results)
-
-        log_mse = float(np.mean(results["log_residual"] ** 2))
 
         rows.append(
             {
                 "model_version": version,
                 "evaluation": "in_sample",
                 "n": len(results),
-                "log_mse": log_mse,
+                "log_mse": metrics["log_mse"],
                 "r2": metrics["r2"],
                 "rmse": metrics["rmse"],
                 "mape": metrics["mape"],

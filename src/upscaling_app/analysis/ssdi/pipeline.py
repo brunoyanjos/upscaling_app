@@ -12,6 +12,7 @@ from upscaling_app.analysis.ssdi.io.persistence import (
     save_oil_metrics,
     save_ssdi_analysis,
 )
+
 from upscaling_app.analysis.ssdi.plotting import save_parity_plot
 
 

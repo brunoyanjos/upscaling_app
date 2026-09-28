@@ -40,49 +40,17 @@ upscaling_app/
 
 ## Installation
 
-Create and activate a virtual environment, then install the package and its
-dependencies in editable mode (Python 3.11 or newer):
+Install the package in editable mode:
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-python -m pip install -e .
+pip install -e .
 ```
-
-Activate the environment with `source venv/bin/activate` in each new terminal.
-Run these commands from the project root. If you move the project directory,
-repeat the editable installation so its source path is updated.
 
 The project-wide CLI entry point is:
 
 ```bash
 upscaling
 ```
-
-For example, run the SSMD workflow with:
-
-```bash
-upscaling ssmd
-```
-
-### macOS: package not found after a successful installation
-
-Use `venv` (without a leading dot) for the environment. On this machine, the
-macOS `hidden` flag was repeatedly applied to `.venv` and its contents. Python
-3.13 skips hidden `.pth` files, breaking the editable installation with
-`ModuleNotFoundError: No module named 'upscaling_app'`. Clearing the flag only
-provided a temporary repair; the process applying it has not been identified.
-
-When switching from the old environment, open a new terminal and run:
-
-```bash
-source venv/bin/activate
-upscaling ssdi
-```
-
-In VS Code, use **Python: Select Interpreter** to select `venv/bin/python` if
-the editor still has the old interpreter selected. You can also run
-`./venv/bin/upscaling ssdi` directly without activating the environment.
 
 ## Architecture
 
@@ -153,7 +121,7 @@ upscaling analyze experimental treatment-effect
 upscaling analyze ssmd
 ```
 
-Production SSDI and SSMD workflows are also exposed through the project CLI according to the current implementation.
+Production baseline SSDI and SSMD workflows are exposed through the project CLI according to the current implementation. Newer oil-wise and presentation-performance workflows are implemented in the package but are pending final CLI integration.
 
 ## Development status
 
@@ -185,7 +153,17 @@ statistical analysis
 predictive validation
 ```
 
-The reconstructed SSDI reference and recalibrated models are evaluated independently from the calibration workflow.
+The reconstructed SSDI reference and recalibrated models are evaluated independently from the calibration workflow. The current presentation workflow also includes oil-wise in-sample calibration and a 2 mm gas / no-gas performance diagnostic.
+
+Current reference comparison:
+
+```text
+reference    Log-MSE 0.435997    R² 0.643330    RMSE 0.4910 mm    MAPE 64.43 %
+global       Log-MSE 0.426986    R² 0.685533    RMSE 0.4610 mm    MAPE 57.96 %
+oil-wise     Log-MSE 0.128635    R² 0.828497    RMSE 0.3405 mm    MAPE 30.11 %
+```
+
+The oil-wise result is an in-sample diagnostic; leave-one-oil-out remains the cross-oil predictive validation workflow.
 
 ### Milestone 3 — SSMD Pipeline Reconstruction
 
@@ -198,10 +176,12 @@ Current SSMD capabilities include:
 - reconstructed SINTEF Equation 5 and Equation 6;
 - explicit model versions;
 - by-regime and global `c,d` regression;
-- persisted experiment-level predictions;
+- oil-wise identifiable-factor regression;
+- persisted experiment-level predictions and local calibration summaries;
 - SSMD reporting;
 - separate experimental and model-analysis workflows;
-- parity evaluation used in the current presentation.
+- parity evaluation used in the current presentation;
+- global / oil-wise comparison overall and by SSMD regime.
 
 Reference SSMD results:
 
@@ -213,11 +193,30 @@ Equation 6 — SINTEF
 Log-MSE = 0.128723
 
 Global regressed c,d
-Log-MSE ≈ 0.116
-R²_log  ≈ 0.548
+Log-MSE = 0.115841
+R²      = 0.570007
+MAPE    = 30.08 %
+
+Oil-wise identifiable factor
+Log-MSE = 0.119372
+R²      = 0.515264
+MAPE    = 31.39 %
 ```
 
-The global `c,d` model reduces Log-MSE by approximately 10.1% relative to the reconstructed SINTEF Equation-6 reference while replacing regime-specific `c,d` values with one global pair. `eta` remains gas-condition dependent.
+The global `c,d` model remains slightly better than the oil-wise SSMD diagnostic on the pooled in-sample dataset. The oil-wise workflow fits the identifiable factor `k_i = c + d mu_i/sigma_i` rather than independent local `c_i,d_i` pairs. `eta` remains gas-condition dependent.
+
+## Current finalization checkpoint
+
+The main presentation analyses for SSDI and SSMD are implemented. Before the modelling milestones are treated as fully stabilized, the following engineering work remains:
+
+```text
+- expose SSDI oil-wise and performance workflows through the CLI;
+- expose SSMD oil-wise and performance workflows through the CLI;
+- review model-version constants and persistence schemas;
+- remove temporary diagnostic code;
+- run end-to-end reproducibility checks from a clean state;
+- freeze final numerical reference outputs in the documentation.
+```
 
 ## Next scientific workflow — droplet-size distributions
 

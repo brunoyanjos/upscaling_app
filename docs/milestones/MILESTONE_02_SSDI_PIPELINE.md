@@ -30,7 +30,8 @@ src/upscaling_app/
 │       ├── workflows/
 │       │   ├── baseline.py
 │       │   ├── filtered.py
-│       │   └── oil_sensitivity.py
+│       │   ├── oil_sensitivity.py
+│       │   └── oil_wise.py
 │       ├── prediction.py
 │       ├── reporting.py
 │       ├── results.py
@@ -41,7 +42,9 @@ src/upscaling_app/
         ├── evaluation/
         │   ├── comparison.py
         │   ├── leave_one_oil_out.py
-        │   └── oil_analysis.py
+        │   ├── oil_analysis.py
+        │   ├── oil_wise.py
+        │   └── performance.py
         ├── io/
         │   ├── data.py
         │   └── persistence.py
@@ -148,6 +151,7 @@ Current versions include:
 jax_baseline_all
 jax_filtered_iqr
 jax_exclude_3016_4665
+jax_oil_wise
 sintef_baseline
 ```
 
@@ -228,6 +232,66 @@ MAPE                  36.01 %
 ```
 
 The result is explicitly interpreted as a subset sensitivity study. Improved in-sample metrics after removing oils are not treated as independent evidence of improved predictive performance.
+
+### Oil-wise calibration workflow
+
+An additional oil-wise calibration workflow was implemented for presentation diagnostics. Each of the ten oils is calibrated independently using its nine SSDI experiments.
+
+The physical SSDI correlation is unchanged. The local workflow changes only the numerical calibration strategy used to explore oil-specific coefficients.
+
+The original fixed-point solver remains the validated production reference. A Newton formulation was derived from the same implicit correlation and numerically validated against the original solver for positive `B`, with prediction differences on the order of machine precision. The Newton formulation is used in the oil-wise workflow because it remains numerically stable when the local optimization crosses `B = 0`.
+
+The local optimization uses `scipy.optimize.least_squares` on logarithmic residuals. This replaced an exploratory Powell implementation that could converge to poor local solutions for individual oils.
+
+Oil-wise calibration characteristics:
+
+```text
+10 oils
+9 experiments per oil
+A > 0
+B allowed to cross zero inside the exploratory local bounds
+solver       Newton formulation of the validated implicit equation
+optimizer    least_squares
+objective    logarithmic residuals / Log-MSE
+```
+
+Two oils converge to slightly negative local `B` values:
+
+```text
+3016    B ≈ -0.00208
+4662    B ≈ -0.00174
+```
+
+These values are close to zero and are treated as local calibration behaviour rather than evidence of a strong physical sign reversal.
+
+Overall in-sample comparison:
+
+```text
+model        n    Log-MSE    R²        RMSE [mm]    MAPE [%]
+reference    90   0.435997   0.643330     0.4910       64.43
+global       90   0.426986   0.685533     0.4610       57.96
+oil-wise     90   0.128635   0.828497     0.3405       30.11
+```
+
+The oil-wise result is explicitly an **in-sample calibration diagnostic**. It is not equivalent to leave-one-oil-out predictive validation because each oil-specific coefficient pair is fitted using data from that same oil.
+
+### Gas / no-gas performance diagnostic
+
+A presentation-oriented comparison was added for gas-containing SSDI experiments. Because only the 2 mm nozzle contains both gas and no-gas experiments, the comparison is restricted to that diameter to avoid confounding gas effects with nozzle diameter.
+
+Reference results:
+
+```text
+model       condition    n    Log-MSE    R²        RMSE [mm]    MAPE [%]
+reference   no gas      30   0.254102   0.697901     0.4682       33.27
+reference   gas         30   0.639490   0.352289     0.5741       95.26
+global      no gas      30   0.292058   0.719886     0.4508       33.35
+global      gas         30   0.594078   0.490742     0.5090       82.69
+oil-wise    no gas      30   0.156460   0.753887     0.4226       27.64
+oil-wise    gas         30   0.077114   0.893334     0.2330       25.32
+```
+
+The global formulation loses accuracy for gas-containing experiments, whereas the oil-wise in-sample calibration substantially reduces the error for this subset. This motivates further investigation of oil-property / gas interactions, but it is not by itself predictive validation.
 
 ### Statistical analysis
 
@@ -339,6 +403,8 @@ parity plots
 leave-one-oil-out Log-MSE by oil
 leave-one-oil-out MAPE by oil
 leave-one-oil-out mean log residual by oil
+reference / global / oil-wise parity comparison
+2 mm gas / no-gas Log-MSE comparison
 ```
 
 Parity figures are square, use logarithmic axes where appropriate, omit figure titles intended to be supplied by article captions, and preserve the identity line `y = x`.
@@ -355,6 +421,7 @@ Current outputs include:
 
 ```text
 ssdi_results.xlsx
+ssdi_calibrations.xlsx
 ssdi_analysis_<model_version>.xlsx
 ssdi_oil_metrics_<model_version>.xlsx
 ssdi_model_comparison.xlsx
@@ -426,6 +493,8 @@ upscaling analyze ssdi --loo
 
 `--model`, `--compare`, and `--loo` are mutually exclusive CLI options so that incompatible analysis modes cannot be requested simultaneously.
 
+The newer oil-wise calibration and presentation-performance workflows are currently callable from the Python package but are **not yet exposed through the CLI**. Final CLI integration is deferred to the project-finalization pass so that the validated scientific results are not changed while command routing is reorganized.
+
 ## Architectural decisions
 
 The following principles were reinforced during this milestone:
@@ -469,7 +538,10 @@ The current SSDI architecture is stable, but several improvements remain intenti
 - optimizer and grid-search settings are not yet externally configurable;
 - no independent external experimental dataset is currently available for validation;
 - leave-one-oil-out evaluates generalization across the oils present in the normalized database, not generalization outside the experimental campaign;
-- MAPE remains sensitive to experiments with relatively small measured droplet diameters and should therefore be interpreted together with logarithmic error and RMSE.
+- MAPE remains sensitive to experiments with relatively small measured droplet diameters and should therefore be interpreted together with logarithmic error and RMSE;
+- oil-wise calibration is an in-sample diagnostic and must not be presented as out-of-oil validation;
+- oil-wise and presentation-performance workflows still require final CLI integration;
+- the final `versions.py`, persistence schemas, and CLI surface should be reviewed together during project cleanup.
 
 These limitations do not block completion of the SSDI reconstruction milestone.
 
@@ -489,6 +561,8 @@ persistence
 statistical diagnostics
 outlier sensitivity
 oil-level sensitivity
+oil-wise calibration diagnostics
+gas / no-gas performance diagnostics
 predictive validation
 ```
 

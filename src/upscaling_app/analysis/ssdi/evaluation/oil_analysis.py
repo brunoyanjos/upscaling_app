@@ -1,15 +1,20 @@
-import numpy as np
 import pandas as pd
 
 from upscaling_app import paths
+from upscaling_app.analysis.ssdi.metrics import (
+    calculate_global_metrics,
+)
 
 
 def add_oil_metadata(
     results: pd.DataFrame,
 ) -> pd.DataFrame:
     experiments = pd.read_excel(
-        paths.DATABASE_DIR / "experiments.xlsx",
-        usecols=["experiment_id", "oil_id"],
+        paths.EXPERIMENTS_DATABASE,
+        usecols=[
+            "experiment_id",
+            "oil_id",
+        ],
     )
 
     return results.merge(
@@ -26,19 +31,18 @@ def calculate_oil_metrics(
     rows = []
 
     for oil_id, group in results.groupby("oil_id"):
-        d_exp = group["d50_exp"].to_numpy()
-        d_pred = group["d50_pred"].to_numpy()
-
-        rmse = np.sqrt(np.mean((d_exp - d_pred) ** 2))
+        metrics = calculate_global_metrics(group)
 
         rows.append(
             {
                 "oil_id": oil_id,
                 "n": len(group),
-                "mape": group["absolute_percentage_error"].mean(),
-                "rmse": rmse,
-                "mean_log_residual": group["log_residual"].mean(),
-                "std_log_residual": group["log_residual"].std(),
+                "log_mse": metrics["log_mse"],
+                "r2": metrics["r2"],
+                "rmse": metrics["rmse"],
+                "mape": metrics["mape"],
+                "mean_log_residual": float(group["log_residual"].mean()),
+                "std_log_residual": float(group["log_residual"].std()),
                 "outlier_count": int(group["is_outlier"].sum()),
             }
         )

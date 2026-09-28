@@ -18,6 +18,12 @@ def add_point_metrics(results: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def calculate_log_mse(
+    results: pd.DataFrame,
+) -> float:
+    return float(np.mean(results["log_residual"].to_numpy() ** 2))
+
+
 def calculate_global_metrics(
     results: pd.DataFrame,
 ) -> dict[str, float]:
@@ -25,7 +31,13 @@ def calculate_global_metrics(
     d_pred = results["d50_pred"].to_numpy()
 
     return {
-        "r2": float(r2_score(d_exp, d_pred)),
+        "log_mse": calculate_log_mse(results),
+        "r2": float(
+            r2_score(
+                d_exp,
+                d_pred,
+            )
+        ),
         "rmse": float(
             np.sqrt(
                 mean_squared_error(

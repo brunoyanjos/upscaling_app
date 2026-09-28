@@ -3,11 +3,6 @@ import pandas as pd
 from upscaling_app import paths
 
 
-import pandas as pd
-
-from upscaling_app import paths
-
-
 def save_ssdi_analysis(
     results: pd.DataFrame,
     model_version: str,

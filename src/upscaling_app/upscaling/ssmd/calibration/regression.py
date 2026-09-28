@@ -103,3 +103,63 @@ def fit_cd_global(
             }
         ]
     )
+
+
+def fit_oil_wise_factor(
+    dataset: pd.DataFrame,
+) -> pd.DataFrame:
+    """Fit one identifiable SSMD property factor per oil.
+
+    The global Equation-6 regression is
+
+        y = c + d * (mu / sigma)
+
+    with
+
+        y = dR / (eta * A_M)^(-3/5).
+
+    Within one oil, mu/sigma is an oil-level property and does not provide
+    independent information to identify both c and d. The identifiable local
+    quantity is therefore
+
+        k_oil = c + d * (mu / sigma).
+
+    Least squares for an intercept-only local model gives k_oil = mean(y).
+    """
+    data = add_sintef_eta(dataset)
+
+    momentum_term = (
+        data["eta"]
+        * data["momentum_amplification"]
+    ) ** EXPONENT
+
+    local_response = (
+        data["dR_measured"]
+        / momentum_term
+    )
+
+    rows = []
+
+    for oil_id, group in data.assign(
+        local_response=local_response,
+    ).groupby(
+        "oil_id",
+        sort=True,
+    ):
+        values = group["local_response"].to_numpy(dtype=float)
+
+        if not np.all(np.isfinite(values)):
+            raise ValueError(
+                f"Non-finite SSMD local response found for oil {oil_id}."
+            )
+
+        rows.append(
+            {
+                "oil_id": oil_id,
+                "k_coef": float(np.mean(values)),
+                "k_std": float(np.std(values, ddof=1)) if len(values) > 1 else 0.0,
+                "n_experiments": len(group),
+            }
+        )
+
+    return pd.DataFrame(rows)

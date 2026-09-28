@@ -28,4 +28,7 @@ OIL_PROPERTIES_DATABASE = DATABASE_DIR / "oil_properties.xlsx"
 OIL_EXTERNAL_PROPERTIES = RAW_DIR / "oil_external_properties.xlsx"
 
 SSDI_RESULTS = RESULTS_DIR / "ssdi_results.xlsx"
+SSDI_CALIBRATIONS = RESULTS_DIR / "ssdi_calibrations.xlsx"
+
 SSMD_RESULTS = RESULTS_DIR / "ssmd_results.xlsx"
+SSMD_CALIBRATIONS = RESULTS_DIR / "ssmd_calibrations.xlsx"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from upscaling_app.upscaling.ssmd.physics.model import (
@@ -103,6 +104,53 @@ def add_global_regressed_prediction(
     return result
 
 
+def add_oil_wise_prediction(
+    dataset: pd.DataFrame,
+    coefficients: pd.DataFrame,
+) -> pd.DataFrame:
+    result = add_sintef_eta(dataset)
+
+    result = result.merge(
+        coefficients[
+            [
+                "oil_id",
+                "k_coef",
+            ]
+        ],
+        on="oil_id",
+        how="left",
+        validate="many_to_one",
+    )
+
+    if result["k_coef"].isna().any():
+        missing = result.loc[
+            result["k_coef"].isna(),
+            ["experiment_id", "oil_id"],
+        ]
+        raise ValueError(
+            "Oil-wise SSMD coefficient missing for some experiments:\n"
+            f"{missing.to_string(index=False)}"
+        )
+
+    result["dR_pred"] = (
+        result["eta"]
+        * result["momentum_amplification"]
+    ) ** EXPONENT * result["k_coef"]
+
+    if (
+        ~np.isfinite(result["dR_pred"])
+        | (result["dR_pred"] <= 0.0)
+    ).any():
+        raise ValueError("Oil-wise SSMD prediction produced invalid dR values.")
+
+    result["d50_pred"] = (
+        result["dR_pred"]
+        * result["untreated_d50_pred"]
+    )
+
+    return result
+
+
 def build_prediction_table(
     dataset: pd.DataFrame,
     *,
@@ -115,6 +163,42 @@ def build_prediction_table(
         "model_version",
         model_version,
     )
+
+    return predictions.rename(
+        columns={
+            "dR_measured": "dR_exp",
+            "measured_d50": "d50_exp",
+        }
+    )
+
+
+def build_oil_wise_prediction_table(
+    dataset: pd.DataFrame,
+    *,
+    model_version: str,
+) -> pd.DataFrame:
+    predictions = dataset[
+        [
+            "experiment_id",
+            "untreated_experiment_id",
+            "eta",
+            "k_coef",
+            "dR_measured",
+            "dR_pred",
+            "measured_d50",
+            "d50_pred",
+        ]
+    ].copy()
+
+    predictions.insert(
+        2,
+        "model_version",
+        model_version,
+    )
+
+    # Keep the persisted schema compatible with the existing SSMD results.
+    predictions["c_coef"] = np.nan
+    predictions["d_coef"] = np.nan
 
     return predictions.rename(
         columns={

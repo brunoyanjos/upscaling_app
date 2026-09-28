@@ -25,6 +25,7 @@ ALL_OILS = [
 
 EXCLUDED_OILS = [
     3016,
+    4662,
     4665,
 ]
 

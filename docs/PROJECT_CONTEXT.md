@@ -30,7 +30,7 @@ Next scientific workflow
 Droplet-size distributions
 ```
 
-For the current presentation, the SSDI and SSMD blocks are considered closed. The next presentation section is droplet-size distributions.
+For the current presentation, the SSDI and SSMD scientific result blocks are considered closed. Both now include global-versus-oil-wise presentation diagnostics. The immediate engineering task is project finalization: CLI integration, persistence/version review, cleanup, and reproducibility checks. The next scientific workflow remains droplet-size distributions.
 
 ## Current architecture
 
@@ -229,7 +229,17 @@ statistical analysis
 predictive validation
 ```
 
-The current presentation includes hydrodynamic screening, physical scaling, coefficient calibration, parity analysis, residual diagnostics, in-sample sensitivity analyses, and leave-one-oil-out validation.
+The current presentation includes hydrodynamic screening, physical scaling, coefficient calibration, parity analysis, residual diagnostics, in-sample sensitivity analyses, leave-one-oil-out validation, oil-wise calibration, and a 2 mm gas / no-gas performance comparison.
+
+Current presentation-level SSDI reference metrics:
+
+```text
+reference    Log-MSE 0.435997    R² 0.643330    RMSE 0.4910 mm    MAPE 64.43 %
+global       Log-MSE 0.426986    R² 0.685533    RMSE 0.4610 mm    MAPE 57.96 %
+oil-wise     Log-MSE 0.128635    R² 0.828497    RMSE 0.3405 mm    MAPE 30.11 %
+```
+
+The oil-wise SSDI result is an in-sample diagnostic, not a replacement for leave-one-oil-out validation.
 
 ## SSMD status
 
@@ -294,6 +304,7 @@ The IFT term uses the untreated reference IFT.
 sintef_baseline
 regressed_cd_baseline
 regressed_cd_global
+regressed_oil_wise
 ```
 
 `regressed_cd_global` fits one global pair of `c,d` coefficients over all SSMD experiments while retaining the SINTEF model structure and gas-dependent `eta` treatment.
@@ -314,15 +325,23 @@ Log-MSE ≈ 0.129
 R²_log  ≈ 0.498
 ```
 
-The global `c,d` regression therefore reduces Log-MSE by approximately 10.1% while replacing regime-specific `c,d` values with a single pair.
+The global `c,d` regression therefore reduces Log-MSE relative to the reconstructed SINTEF Equation-6 reference while replacing regime-specific `c,d` values with a single pair.
 
-This is an in-sample calibration result. `eta` remains condition dependent, and no universal full-scale SSMD closure has yet been validated.
+An oil-wise diagnostic was also implemented using the identifiable local factor `k_i = c + d mu_i/sigma_i`. Independent local `c_i,d_i` pairs are not fitted because they are not separately identifiable within a fixed oil.
+
+```text
+reference    Log-MSE 0.128723    R² 0.436384    RMSE 0.056085    MAPE 33.82 %
+global       Log-MSE 0.115841    R² 0.570007    RMSE 0.048987    MAPE 30.08 %
+oil-wise     Log-MSE 0.119372    R² 0.515264    RMSE 0.052012    MAPE 31.39 %
+```
+
+Unlike SSDI, the oil-wise SSMD diagnostic does not improve the pooled global regression. This is retained as a scientific result. `eta` remains condition dependent, and no universal full-scale SSMD closure has yet been validated.
 
 ### SSMD analysis
 
 Model evaluation is separated from calibration.
 
-The SSMD analysis workflow consumes persisted predictions and currently supports parity comparisons for the momentum-only Equation 5, reconstructed SINTEF Equation 6, and the global `c,d` regression.
+The SSMD analysis workflow consumes persisted predictions and currently supports parity comparisons for the momentum-only Equation 5, reconstructed SINTEF Equation 6, the global `c,d` regression, and the oil-wise diagnostic. Presentation analysis also compares the three principal Equation-6 strategies overall and across `3 mm — no gas`, `2 mm — no gas`, and `2 mm — gas`.
 
 Experimental SSMD analysis remains in `analysis/experimental/` and includes descriptive regime response, monotonicity, and physical screening diagnostics.
 
@@ -340,7 +359,19 @@ upscaling analyze experimental treatment-effect
 upscaling analyze ssmd
 ```
 
-CLI command naming should be treated as part of the public project surface and stabilized before Milestone 3 is formally closed.
+CLI command naming should be treated as part of the public project surface and stabilized before Milestone 3 is formally closed. The newly added SSDI and SSMD oil-wise / presentation-performance workflows currently run through direct Python calls and still require CLI integration.
+
+### Immediate finalization checkpoint
+
+```text
+- integrate SSDI oil-wise and performance workflows into the CLI;
+- integrate SSMD oil-wise and performance workflows into the CLI;
+- review versions.py for both modelling packages;
+- review paths.py and persistence workbook schemas;
+- remove temporary diagnostics and exploratory glue code;
+- run the complete workflows from a clean state;
+- freeze the resulting numerical references in the milestone documentation.
+```
 
 ## Next scientific workflow — droplet-size distributions
 

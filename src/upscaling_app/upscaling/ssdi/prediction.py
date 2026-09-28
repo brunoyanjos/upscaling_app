@@ -1,7 +1,10 @@
 import numpy as np
 import pandas as pd
 
-from upscaling_app.upscaling.ssdi.physics.model import calculate_d_pred
+from upscaling_app.upscaling.ssdi.physics.model import (
+    calculate_d_pred,
+    calculate_d_pred_newton,
+)
 
 
 def predict_ssdi(
@@ -11,13 +14,21 @@ def predict_ssdi(
     a: float,
     b: float,
     model_version: str,
+    solver: str = "fixed_point",
 ) -> pd.DataFrame:
     d50_d_exp = (
         experiments["measured_d50"] / experiments["nozzle_diameter"]
     ).to_numpy()
 
+    if solver == "fixed_point":
+        predictor = calculate_d_pred
+    elif solver == "newton":
+        predictor = calculate_d_pred_newton
+    else:
+        raise ValueError(f"Unknown SSDI solver: {solver!r}")
+
     d50_d_pred = np.asarray(
-        calculate_d_pred(
+        predictor(
             we,
             ca,
             a,
