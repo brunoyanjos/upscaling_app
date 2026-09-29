@@ -3,26 +3,59 @@ import pandas as pd
 from upscaling_app import paths
 
 
-def save_ssdi_results(results: pd.DataFrame) -> None:
-    paths.RESULTS_DIR.mkdir(
+def _replace_model_versions(
+    existing: pd.DataFrame,
+    new_data: pd.DataFrame,
+) -> pd.DataFrame:
+    if "model_version" not in new_data.columns:
+        raise ValueError("SSDI persisted data must contain a 'model_version' column.")
+
+    if existing.empty:
+        return new_data.copy()
+
+    if "model_version" not in existing.columns:
+        raise ValueError(
+            "Existing SSDI persisted data does not contain a " "'model_version' column."
+        )
+
+    model_versions = new_data["model_version"].dropna().unique()
+
+    existing = existing.loc[~existing["model_version"].isin(model_versions)]
+
+    return pd.concat(
+        [existing, new_data],
+        ignore_index=True,
+    )
+
+
+def _load_table(
+    path,
+) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame()
+
+    return pd.read_excel(path)
+
+
+def save_ssdi_results(
+    results: pd.DataFrame,
+) -> None:
+    output = paths.SSDI_PREDICTIONS_PATH
+
+    output.parent.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    if paths.SSDI_RESULTS.exists():
-        existing = pd.read_excel(paths.SSDI_RESULTS)
+    existing = _load_table(output)
 
-        model_versions = results["model_version"].unique()
-
-        existing = existing.loc[~existing["model_version"].isin(model_versions)]
-
-        results = pd.concat(
-            [existing, results],
-            ignore_index=True,
-        )
+    results = _replace_model_versions(
+        existing=existing,
+        new_data=results,
+    )
 
     results.to_excel(
-        paths.SSDI_RESULTS,
+        output,
         index=False,
     )
 
@@ -30,34 +63,33 @@ def save_ssdi_results(results: pd.DataFrame) -> None:
 def save_ssdi_calibrations(
     calibrations: pd.DataFrame,
 ) -> None:
-    paths.RESULTS_DIR.mkdir(
+    output = paths.SSDI_CALIBRATIONS_PATH
+
+    output.parent.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    if paths.SSDI_CALIBRATIONS.exists():
-        existing = pd.read_excel(paths.SSDI_CALIBRATIONS)
+    existing = _load_table(output)
 
-        model_versions = calibrations["model_version"].unique()
+    calibrations = _replace_model_versions(
+        existing=existing,
+        new_data=calibrations,
+    )
 
-        existing = existing.loc[~existing["model_version"].isin(model_versions)]
-
-        calibrations = pd.concat(
-            [
-                existing,
-                calibrations,
-            ],
-            ignore_index=True,
-        )
-
-    calibrations = calibrations.sort_values(
-        [
+    sort_columns = [
+        column
+        for column in (
             "model_version",
             "oil_id",
-        ]
-    ).reset_index(drop=True)
+        )
+        if column in calibrations.columns
+    ]
+
+    if sort_columns:
+        calibrations = calibrations.sort_values(sort_columns).reset_index(drop=True)
 
     calibrations.to_excel(
-        paths.SSDI_CALIBRATIONS,
+        output,
         index=False,
     )

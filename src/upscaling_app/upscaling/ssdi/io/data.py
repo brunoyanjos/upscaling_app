@@ -10,11 +10,12 @@ def load_ssdi_experiments(
     nozzle_diameters: Sequence[float],
     dispersion_kinds: Sequence[str],
 ) -> pd.DataFrame:
-    database_path = paths.DATABASE_DIR / "experiments.xlsx"
-    df = pd.read_excel(database_path)
+    experiments = pd.read_excel(
+        paths.EXPERIMENTS_DATABASE,
+    )
 
-    mask = df["oil_id"].isin(oil_ids)
-    mask &= df["nozzle_diameter"].isin(nozzle_diameters)
-    mask &= df["dispersion_kind"].isin(dispersion_kinds)
+    mask = experiments["oil_id"].isin(oil_ids)
+    mask &= experiments["nozzle_diameter"].isin(nozzle_diameters)
+    mask &= experiments["dispersion_kind"].isin(dispersion_kinds)
 
-    return df.loc[mask].copy()
+    return experiments.loc[mask].copy()

@@ -3,7 +3,14 @@ import pandas as pd
 from upscaling_app.upscaling.ssdi.calibration.pipeline import (
     calibrate_ssdi_oil_wise,
 )
-from upscaling_app.upscaling.ssdi.io.data import load_ssdi_experiments
+from upscaling_app.upscaling.ssdi.datasets import (
+    SSDI_DISPERSION_KINDS,
+    SSDI_NOZZLE_DIAMETERS,
+    SSDI_OIL_IDS,
+)
+from upscaling_app.upscaling.ssdi.io.data import (
+    load_ssdi_experiments,
+)
 from upscaling_app.upscaling.ssdi.io.persistence import (
     save_ssdi_calibrations,
     save_ssdi_results,
@@ -11,19 +18,24 @@ from upscaling_app.upscaling.ssdi.io.persistence import (
 from upscaling_app.upscaling.ssdi.physics.derived_properties import (
     add_ssdi_physics,
 )
-from upscaling_app.upscaling.ssdi.prediction import predict_ssdi
-from upscaling_app.upscaling.ssdi.versions import OIL_WISE_VERSION
-from upscaling_app.upscaling.ssdi.workflows.baseline import ALL_OILS
+from upscaling_app.upscaling.ssdi.prediction import (
+    predict_ssdi,
+)
+from upscaling_app.upscaling.ssdi.versions import (
+    OIL_WISE_VERSION,
+)
 
 
 def run_oil_wise() -> pd.DataFrame:
     experiments = load_ssdi_experiments(
-        oil_ids=ALL_OILS,
-        nozzle_diameters=[2e-3, 3e-3],
-        dispersion_kinds=["Untreated", "SSDI"],
+        oil_ids=SSDI_OIL_IDS,
+        nozzle_diameters=SSDI_NOZZLE_DIAMETERS,
+        dispersion_kinds=SSDI_DISPERSION_KINDS,
     )
 
-    experiments = add_ssdi_physics(experiments)
+    experiments = add_ssdi_physics(
+        experiments,
+    )
 
     calibration_rows = []
     prediction_frames = []
@@ -55,8 +67,9 @@ def run_oil_wise() -> pd.DataFrame:
         calibration_rows.append(
             {
                 "model_version": OIL_WISE_VERSION,
+                "calibration_scope": "oil_wise",
                 "oil_id": oil_id,
-                "n": len(oil_experiments),
+                "experiment_count": len(oil_experiments),
                 "solver": "newton",
                 "optimizer": "least_squares",
                 "a_initial": calibration.a_initial,

@@ -4,7 +4,10 @@ import pandas as pd
 from upscaling_app.upscaling.ssdi.calibration.optimization import loss_fn
 from upscaling_app.upscaling.ssdi.calibration.pipeline import calibrate_ssdi
 from upscaling_app.upscaling.ssdi.io.data import load_ssdi_experiments
-from upscaling_app.upscaling.ssdi.io.persistence import save_ssdi_results
+from upscaling_app.upscaling.ssdi.io.persistence import (
+    save_ssdi_calibrations,
+    save_ssdi_results,
+)
 from upscaling_app.upscaling.ssdi.physics.derived_properties import add_ssdi_physics
 from upscaling_app.upscaling.ssdi.prediction import predict_ssdi
 from upscaling_app.upscaling.ssdi.results import BaselineResult, SSDIModelResult
@@ -13,18 +16,11 @@ from upscaling_app.upscaling.ssdi.versions import (
     REFERENCE_VERSION,
 )
 
-ALL_OILS = [
-    3014,
-    3015,
-    3016,
-    4661,
-    4662,
-    4663,
-    4664,
-    4665,
-    4666,
-    4667,
-]
+from upscaling_app.upscaling.ssdi.datasets import (
+    SSDI_DISPERSION_KINDS,
+    SSDI_NOZZLE_DIAMETERS,
+    SSDI_OIL_IDS,
+)
 
 A_REFERENCE = 24.6
 B_REFERENCE = 0.08
@@ -32,16 +28,18 @@ B_REFERENCE = 0.08
 
 def run_baseline() -> BaselineResult:
     experiments = load_ssdi_experiments(
-        oil_ids=ALL_OILS,
-        nozzle_diameters=[2e-3, 3e-3],
-        dispersion_kinds=["Untreated", "SSDI"],
+        oil_ids=SSDI_OIL_IDS,
+        nozzle_diameters=SSDI_NOZZLE_DIAMETERS,
+        dispersion_kinds=SSDI_DISPERSION_KINDS,
     )
 
     experiments = add_ssdi_physics(experiments)
 
     calibration = calibrate_ssdi(experiments)
 
-    reference_params = jnp.array([A_REFERENCE, B_REFERENCE])
+    reference_params = jnp.array(
+        [A_REFERENCE, B_REFERENCE],
+    )
 
     loss_reference = float(
         loss_fn(
@@ -70,7 +68,7 @@ def run_baseline() -> BaselineResult:
         model_version=REFERENCE_VERSION,
     )
 
-    results = pd.concat(
+    predictions = pd.concat(
         [
             optimized_predictions,
             reference_predictions,
@@ -78,7 +76,26 @@ def run_baseline() -> BaselineResult:
         ignore_index=True,
     )
 
-    save_ssdi_results(results)
+    calibrations = pd.DataFrame(
+        [
+            {
+                "model_version": BASELINE_VERSION,
+                "calibration_scope": "global",
+                "oil_id": pd.NA,
+                "experiment_count": len(experiments),
+                "solver": "fixed_point",
+                "optimizer": "L-BFGS-B",
+                "a_initial": calibration.a_initial,
+                "b_initial": calibration.b_initial,
+                "a_optimized": calibration.a_optimized,
+                "b_optimized": calibration.b_optimized,
+                "log_mse": calibration.loss,
+            }
+        ]
+    )
+
+    save_ssdi_results(predictions)
+    save_ssdi_calibrations(calibrations)
 
     return BaselineResult(
         model=SSDIModelResult(
