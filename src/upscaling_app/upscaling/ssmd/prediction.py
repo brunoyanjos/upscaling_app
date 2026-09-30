@@ -3,112 +3,129 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from upscaling_app.upscaling.ssmd.physics.model import (
-    EXPONENT,
-    add_sintef_eta,
+from upscaling_app.upscaling.ssmd.io.data import (
+    add_ssdi_untreated_predictions,
 )
-
-REGIME_KEYS = [
-    "nozzle_diameter",
-    "has_gas",
-]
+from upscaling_app.upscaling.ssmd.physics.model import (
+    add_sintef_parameters,
+    predict_dR,
+    predict_dR_from_factor,
+)
 
 PREDICTION_COLUMNS = [
     "experiment_id",
     "untreated_experiment_id",
+    "oil_id",
+    "nozzle_diameter",
+    "has_gas",
+    "water_jet_fraction",
+    "ssmd_model_version",
+    "ssdi_source_version",
     "eta",
     "c_coef",
     "d_coef",
+    "k_coef",
+    "momentum_amplification",
     "dR_measured",
     "dR_pred",
     "measured_d50",
+    "untreated_d50_measured",
+    "untreated_d50_pred",
     "d50_pred",
 ]
 
 
-def add_regressed_prediction(
+def _require_columns(
+    data: pd.DataFrame,
+    columns: list[str],
+    *,
+    source: str,
+) -> None:
+    missing = [column for column in columns if column not in data.columns]
+
+    if missing:
+        raise ValueError(f"{source} is missing required columns: {missing}")
+
+
+def add_global_cd_prediction(
     dataset: pd.DataFrame,
     coefficients: pd.DataFrame,
 ) -> pd.DataFrame:
-    result = dataset.merge(
-        coefficients[
-            REGIME_KEYS
-            + [
-                "eta",
-                "c_coef",
-                "d_coef",
-            ]
+    _require_columns(
+        coefficients,
+        [
+            "c_coef",
+            "d_coef",
         ],
-        on=REGIME_KEYS,
-        how="left",
-        validate="many_to_one",
+        source="Global SSMD calibration",
     )
 
-    missing_coefficients = result[["eta", "c_coef", "d_coef"]].isna().any(axis=1)
+    if len(coefficients) != 1:
+        raise ValueError(
+            "Global SSMD calibration must contain exactly one coefficient set."
+        )
 
-    if missing_coefficients.any():
-        missing = result.loc[
-            missing_coefficients,
+    result = add_sintef_parameters(
+        dataset,
+    )
+
+    result["c_coef"] = float(coefficients["c_coef"].iloc[0])
+
+    result["d_coef"] = float(coefficients["d_coef"].iloc[0])
+
+    result["dR_pred"] = predict_dR(
+        eta=result["eta"],
+        momentum_amplification=result["momentum_amplification"],
+        c_coef=result["c_coef"],
+        d_coef=result["d_coef"],
+        oil_viscosity=result["oil_viscosity"],
+        interfacial_tension=result["untreated_ift"],
+    )
+
+    return result
+
+
+def add_oil_wise_factor_prediction(
+    dataset: pd.DataFrame,
+    coefficients: pd.DataFrame,
+) -> pd.DataFrame:
+    _require_columns(
+        coefficients,
+        [
+            "oil_id",
+            "k_coef",
+        ],
+        source="Oil-wise SSMD calibration",
+    )
+
+    duplicated = coefficients["oil_id"].duplicated(
+        keep=False,
+    )
+
+    if duplicated.any():
+        duplicate_rows = coefficients.loc[
+            duplicated,
             [
-                "experiment_id",
-                "nozzle_diameter",
-                "has_gas",
+                "oil_id",
+                "k_coef",
             ],
         ]
 
         raise ValueError(
-            "Regression coefficients missing for some SSMD experiments:\n"
-            f"{missing.to_string(index=False)}"
+            "Multiple oil-wise SSMD factors found for the same oil:\n"
+            f"{duplicate_rows.to_string(index=False)}"
         )
 
-    result["dR_pred"] = (
-        result["eta"] * result["momentum_amplification"]
-    ) ** EXPONENT * (
-        result["c_coef"]
-        + result["d_coef"] * result["oil_viscosity"] / result["untreated_ift"]
+    result = add_sintef_parameters(
+        dataset,
     )
 
-    result["d50_pred"] = result["dR_pred"] * result["untreated_d50_pred"]
-
-    return result
-
-
-def add_global_regressed_prediction(
-    dataset: pd.DataFrame,
-    coefficients: pd.DataFrame,
-) -> pd.DataFrame:
-    if len(coefficients) != 1:
-        raise ValueError(
-            "Global SSMD regression must contain exactly one coefficient set."
-        )
-
-    result = dataset.copy()
-
-    c_coef = float(coefficients["c_coef"].iloc[0])
-    d_coef = float(coefficients["d_coef"].iloc[0])
-
-    result = add_sintef_eta(result)
-
-    result["c_coef"] = c_coef
-    result["d_coef"] = d_coef
-
-    result["dR_pred"] = (
-        result["eta"] * result["momentum_amplification"]
-    ) ** EXPONENT * (
-        result["c_coef"]
-        + result["d_coef"] * result["oil_viscosity"] / result["untreated_ift"]
+    result = result.drop(
+        columns=[
+            "c_coef",
+            "d_coef",
+        ]
     )
-
-    result["d50_pred"] = result["dR_pred"] * result["untreated_d50_pred"]
-
-    return result
-
-
-def add_oil_wise_prediction(
-    dataset: pd.DataFrame,
-    coefficients: pd.DataFrame,
-) -> pd.DataFrame:
-    result = add_sintef_eta(dataset)
 
     result = result.merge(
         coefficients[
@@ -122,31 +139,74 @@ def add_oil_wise_prediction(
         validate="many_to_one",
     )
 
-    if result["k_coef"].isna().any():
-        missing = result.loc[
-            result["k_coef"].isna(),
-            ["experiment_id", "oil_id"],
+    missing = result["k_coef"].isna()
+
+    if missing.any():
+        missing_rows = result.loc[
+            missing,
+            [
+                "experiment_id",
+                "oil_id",
+            ],
         ]
+
         raise ValueError(
-            "Oil-wise SSMD coefficient missing for some experiments:\n"
-            f"{missing.to_string(index=False)}"
+            "Oil-wise SSMD factor missing for some experiments:\n"
+            f"{missing_rows.to_string(index=False)}"
         )
 
-    result["dR_pred"] = (
-        result["eta"]
-        * result["momentum_amplification"]
-    ) ** EXPONENT * result["k_coef"]
-
-    if (
-        ~np.isfinite(result["dR_pred"])
-        | (result["dR_pred"] <= 0.0)
-    ).any():
-        raise ValueError("Oil-wise SSMD prediction produced invalid dR values.")
-
-    result["d50_pred"] = (
-        result["dR_pred"]
-        * result["untreated_d50_pred"]
+    result["dR_pred"] = predict_dR_from_factor(
+        eta=result["eta"],
+        momentum_amplification=result["momentum_amplification"],
+        property_factor=result["k_coef"],
     )
+
+    return result
+
+
+def add_end_to_end_prediction(
+    dataset: pd.DataFrame,
+    *,
+    ssdi_source_version: str,
+) -> pd.DataFrame:
+    _require_columns(
+        dataset,
+        [
+            "untreated_experiment_id",
+            "dR_pred",
+        ],
+        source="SSMD prediction dataset",
+    )
+
+    result = add_ssdi_untreated_predictions(
+        dataset,
+        model_version=ssdi_source_version,
+    )
+
+    result["d50_pred"] = result["dR_pred"] * result["untreated_d50_pred"]
+
+    d50_pred = result["d50_pred"].to_numpy(
+        dtype=float,
+    )
+
+    invalid = ~np.isfinite(d50_pred) | (d50_pred <= 0.0)
+
+    if invalid.any():
+        invalid_rows = result.loc[
+            invalid,
+            [
+                "experiment_id",
+                "untreated_experiment_id",
+                "dR_pred",
+                "untreated_d50_pred",
+                "d50_pred",
+            ],
+        ]
+
+        raise ValueError(
+            "Invalid end-to-end SSMD predictions found:\n"
+            f"{invalid_rows.to_string(index=False)}"
+        )
 
     return result
 
@@ -154,55 +214,49 @@ def add_oil_wise_prediction(
 def build_prediction_table(
     dataset: pd.DataFrame,
     *,
-    model_version: str,
+    ssmd_model_version: str,
 ) -> pd.DataFrame:
-    predictions = dataset[PREDICTION_COLUMNS].copy()
-
-    predictions.insert(
-        2,
-        "model_version",
-        model_version,
-    )
-
-    return predictions.rename(
-        columns={
-            "dR_measured": "dR_exp",
-            "measured_d50": "d50_exp",
-        }
-    )
-
-
-def build_oil_wise_prediction_table(
-    dataset: pd.DataFrame,
-    *,
-    model_version: str,
-) -> pd.DataFrame:
-    predictions = dataset[
+    _require_columns(
+        dataset,
         [
             "experiment_id",
             "untreated_experiment_id",
+            "oil_id",
+            "nozzle_diameter",
+            "has_gas",
+            "water_jet_fraction",
+            "ssdi_source_version",
             "eta",
-            "k_coef",
+            "momentum_amplification",
             "dR_measured",
             "dR_pred",
             "measured_d50",
+            "untreated_d50_measured",
+            "untreated_d50_pred",
             "d50_pred",
-        ]
-    ].copy()
-
-    predictions.insert(
-        2,
-        "model_version",
-        model_version,
+        ],
+        source="SSMD prediction dataset",
     )
 
-    # Keep the persisted schema compatible with the existing SSMD results.
-    predictions["c_coef"] = np.nan
-    predictions["d_coef"] = np.nan
+    predictions = dataset.copy()
+
+    if "c_coef" not in predictions.columns:
+        predictions["c_coef"] = np.nan
+
+    if "d_coef" not in predictions.columns:
+        predictions["d_coef"] = np.nan
+
+    if "k_coef" not in predictions.columns:
+        predictions["k_coef"] = np.nan
+
+    predictions["ssmd_model_version"] = ssmd_model_version
+
+    predictions = predictions[PREDICTION_COLUMNS].copy()
 
     return predictions.rename(
         columns={
             "dR_measured": "dR_exp",
             "measured_d50": "d50_exp",
+            "untreated_d50_measured": "untreated_d50_exp",
         }
     )

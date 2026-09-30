@@ -312,15 +312,15 @@ upscaling_app.paths
 Prefer:
 
 ```python
-EXPERIMENTAL_SSMD_FIGURES_DIR = (
-    EXPERIMENTAL_FIGURES_DIR / "ssmd"
-)
+EXPERIMENTAL_RESULTS_DIR = RESULTS_DIR / "experimental"
+EXPERIMENTAL_SSMD_DIR = EXPERIMENTAL_RESULTS_DIR / "ssmd"
+EXPERIMENTAL_SSMD_FIGURES_DIR = EXPERIMENTAL_SSMD_DIR / "figures"
 ```
 
 over repeatedly constructing:
 
 ```python
-paths.EXPERIMENTAL_FIGURES_DIR / "ssmd"
+paths.EXPERIMENTAL_RESULTS_DIR / "ssmd" / "figures"
 ```
 
 Output filenames should describe scientific content:

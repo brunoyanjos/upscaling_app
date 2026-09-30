@@ -1,54 +1,74 @@
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 
 
-def add_point_metrics(
-    results: pd.DataFrame,
-) -> pd.DataFrame:
-    result = results.copy()
+def validate_predictions(
+    observed: np.ndarray,
+    predicted: np.ndarray,
+) -> None:
+    if observed.ndim != 1 or predicted.ndim != 1:
+        raise ValueError("Observed and predicted arrays must be one-dimensional.")
 
-    result["absolute_percentage_error"] = (
-        np.abs(result["dR_exp"] - result["dR_pred"]) / result["dR_exp"] * 100.0
+    if len(observed) != len(predicted):
+        raise ValueError("Observed and predicted arrays must have the same length.")
+
+    if len(observed) == 0:
+        raise ValueError("Performance evaluation requires at least one observation.")
+
+    invalid = (
+        ~np.isfinite(observed)
+        | ~np.isfinite(predicted)
+        | (observed <= 0.0)
+        | (predicted <= 0.0)
     )
 
-    result["log_residual"] = np.log(result["dR_exp"]) - np.log(result["dR_pred"])
+    if invalid.any():
+        raise ValueError("Performance evaluation requires finite positive values.")
 
-    return result
 
+def calculate_metrics(
+    observed: np.ndarray,
+    predicted: np.ndarray,
+) -> dict[str, float | int]:
+    validate_predictions(
+        observed,
+        predicted,
+    )
 
-def calculate_global_metrics(
-    results: pd.DataFrame,
-) -> dict[str, float]:
-    dR_exp = results["dR_exp"].to_numpy()
-    dR_pred = results["dR_pred"].to_numpy()
+    log_observed = np.log(observed)
 
-    residual = dR_exp - dR_pred
+    log_predicted = np.log(predicted)
 
-    ss_res = np.sum(residual**2)
-    ss_tot = np.sum((dR_exp - np.mean(dR_exp)) ** 2)
+    log_residual = log_observed - log_predicted
 
-    r2 = 1.0 - ss_res / ss_tot
+    log_mse = float(np.mean(log_residual**2))
 
-    rmse = np.sqrt(np.mean(residual**2))
+    ss_res = float(np.sum(log_residual**2))
 
-    mape = np.mean(np.abs(residual / dR_exp)) * 100.0
+    ss_tot = float(np.sum((log_observed - np.mean(log_observed)) ** 2))
 
-    log_residual = np.log(dR_exp) - np.log(dR_pred)
+    r2_log = 1.0 - ss_res / ss_tot if ss_tot > 0.0 else np.nan
 
-    log_mse = np.mean(log_residual**2)
+    rmse = float(np.sqrt(np.mean((observed - predicted) ** 2)))
+
+    mape = float(100.0 * np.mean(np.abs((observed - predicted) / observed)))
 
     return {
-        "log_mse": float(log_mse),
-        "r2": float(r2),
-        "rmse": float(rmse),
-        "mape": float(mape),
+        "n": len(observed),
+        "log_mse": log_mse,
+        "r2_log": float(r2_log),
+        "rmse": rmse,
+        "mape_pct": mape,
         "mean_log_residual": float(np.mean(log_residual)),
-        "std_log_residual": float(
-            np.std(
-                log_residual,
-                ddof=1,
+        "std_log_residual": (
+            float(
+                np.std(
+                    log_residual,
+                    ddof=1,
+                )
             )
+            if len(log_residual) > 1
+            else 0.0
         ),
     }

@@ -1,75 +1,126 @@
 from __future__ import annotations
 
-from upscaling_app.upscaling.ssmd.results import (
-    BaselineResult,
-    SSMDModelResult,
-    SSMDRegimeResult,
-)
+import pandas as pd
 
 
-def _regime_name(
-    regime: SSMDRegimeResult,
-) -> str:
-    diameter_mm = regime.nozzle_diameter * 1e3
-
-    if regime.has_gas:
-        return f"{diameter_mm:.0f} mm + gas"
-
-    return f"{diameter_mm:.0f} mm"
-
-
-def _print_regimes(
-    result: SSMDModelResult,
+def _print_header(
+    title: str,
 ) -> None:
-    for regime in result.regimes:
-        print(f"\n{_regime_name(regime)}")
-        print(f"  eta                : {regime.eta:.6f}")
-        print(f"  c                  : {regime.c_coef:.6f}")
-        print(f"  d                  : {regime.d_coef:.6f}")
-
-
-def _print_global_coefficients(
-    result: SSMDModelResult,
-) -> None:
-    first_regime = result.regimes[0]
-
-    print(f"  c                  : {first_regime.c_coef:.6f}")
-    print(f"  d                  : {first_regime.d_coef:.6f}")
-
-
-def print_baseline_report(
-    result: BaselineResult,
-) -> None:
-    model = result.model
-    global_model = result.global_model
-    reference = result.reference
-
-    regime_reduction = (reference.loss - model.loss) / reference.loss * 100.0
-
-    global_reduction = (reference.loss - global_model.loss) / reference.loss * 100.0
-
     print("\n" + "=" * 60)
-    print("SSMD BASELINE CALIBRATION")
+    print(title)
     print("=" * 60)
 
-    print("\nDataset")
-    print(f"  Experiments        : {model.experiment_count}")
 
-    print("\nRegressed by regime")
-    _print_regimes(model)
-    print(f"\n  Log-MSE            : {model.loss:.6f}")
+def print_reference_report(
+    predictions: pd.DataFrame,
+) -> None:
+    _print_header("SSMD SINTEF REFERENCE")
 
-    print("\nGlobal regression")
-    _print_global_coefficients(global_model)
-    print(f"  Log-MSE            : {global_model.loss:.6f}")
+    print(f"\nExperiments        : {len(predictions)}")
 
-    print("\nSINTEF reference")
-    _print_regimes(reference)
-    print(f"\n  Log-MSE            : {reference.loss:.6f}")
+    ssdi_source = predictions["ssdi_source_version"].iloc[0]
 
-    print("\nComparison")
-    print(f"  By-regime reduction: {regime_reduction:.2f} %")
-    print(f"  Global reduction   : {global_reduction:.2f} %")
+    print(f"SSDI source        : {ssdi_source}")
+
+    regimes = (
+        predictions[
+            [
+                "nozzle_diameter",
+                "has_gas",
+                "eta",
+                "c_coef",
+                "d_coef",
+            ]
+        ]
+        .drop_duplicates()
+        .sort_values(
+            [
+                "nozzle_diameter",
+                "has_gas",
+            ]
+        )
+    )
+
+    print("\nSINTEF parameters")
+
+    for row in regimes.itertuples(
+        index=False,
+    ):
+        diameter_mm = row.nozzle_diameter * 1e3
+
+        gas_label = "gas" if row.has_gas else "no gas"
+
+        print(f"\n{diameter_mm:.0f} mm — {gas_label}")
+
+        print(f"  eta              : {row.eta:.6f}")
+        print(f"  c                : {row.c_coef:.6f}")
+        print(f"  d                : {row.d_coef:.6f}")
+
+    print("\nStatus: completed")
+    print("=" * 60)
+
+
+def print_global_report(
+    predictions: pd.DataFrame,
+) -> None:
+    _print_header("SSMD GLOBAL C,D REGRESSION")
+
+    print(f"\nExperiments        : {len(predictions)}")
+
+    ssdi_source = predictions["ssdi_source_version"].iloc[0]
+
+    print(f"SSDI source        : {ssdi_source}")
+
+    c_values = predictions["c_coef"].dropna().unique()
+
+    d_values = predictions["d_coef"].dropna().unique()
+
+    if len(c_values) != 1 or len(d_values) != 1:
+        raise ValueError("Global SSMD predictions must contain one c,d pair.")
+
+    print("\nGlobal coefficients")
+    print(f"  c                : {c_values[0]:.6f}")
+    print(f"  d                : {d_values[0]:.6f}")
+
+    print("\nStatus: completed")
+    print("=" * 60)
+
+
+def print_oil_wise_report(
+    predictions: pd.DataFrame,
+) -> None:
+    _print_header("SSMD OIL-WISE FACTOR")
+
+    print(f"\nExperiments        : {len(predictions)}")
+
+    ssdi_source = predictions["ssdi_source_version"].iloc[0]
+
+    print(f"SSDI source        : {ssdi_source}")
+
+    coefficients = (
+        predictions[
+            [
+                "oil_id",
+                "k_coef",
+            ]
+        ]
+        .drop_duplicates()
+        .sort_values("oil_id")
+    )
+
+    duplicated = coefficients["oil_id"].duplicated(
+        keep=False,
+    )
+
+    if duplicated.any():
+        raise ValueError("Multiple oil-wise SSMD factors found for the same oil.")
+
+    print("\nOil-wise factors")
+
+    for row in coefficients.itertuples(
+        index=False,
+    ):
+        print(f"  {row.oil_id:<8} " f"k = {row.k_coef:.6f}")
 
     print("\nStatus: completed")
     print("=" * 60)

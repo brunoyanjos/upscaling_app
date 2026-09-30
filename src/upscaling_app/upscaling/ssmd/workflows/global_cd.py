@@ -6,7 +6,7 @@ from upscaling_app.upscaling.ssdi.versions import (
     BASELINE_VERSION as DEFAULT_SSDI_SOURCE_VERSION,
 )
 from upscaling_app.upscaling.ssmd.calibration.regression import (
-    fit_oil_wise_factor,
+    fit_cd_global,
 )
 from upscaling_app.upscaling.ssmd.io.data import (
     load_ssmd_calibration_dataset,
@@ -20,11 +20,11 @@ from upscaling_app.upscaling.ssmd.physics.derived_properties import (
 )
 from upscaling_app.upscaling.ssmd.prediction import (
     add_end_to_end_prediction,
-    add_oil_wise_factor_prediction,
+    add_global_cd_prediction,
     build_prediction_table,
 )
 from upscaling_app.upscaling.ssmd.versions import (
-    OIL_WISE_FACTOR_VERSION,
+    GLOBAL_CD_VERSION,
 )
 
 
@@ -36,17 +36,17 @@ def _prepare_dataset() -> pd.DataFrame:
     )
 
 
-def calibrate_oil_wise() -> pd.DataFrame:
+def calibrate_global() -> pd.DataFrame:
     dataset = _prepare_dataset()
 
-    calibration = fit_oil_wise_factor(
+    calibration = fit_cd_global(
         dataset,
     )
 
     calibration.insert(
         0,
         "ssmd_model_version",
-        OIL_WISE_FACTOR_VERSION,
+        GLOBAL_CD_VERSION,
     )
 
     save_calibrations(
@@ -56,27 +56,27 @@ def calibrate_oil_wise() -> pd.DataFrame:
     return calibration
 
 
-def run_oil_wise(
+def run_global(
     *,
     ssdi_source_version: str = DEFAULT_SSDI_SOURCE_VERSION,
 ) -> pd.DataFrame:
     dataset = _prepare_dataset()
 
-    calibration = fit_oil_wise_factor(
+    calibration = fit_cd_global(
         dataset,
     )
 
     calibration.insert(
         0,
         "ssmd_model_version",
-        OIL_WISE_FACTOR_VERSION,
+        GLOBAL_CD_VERSION,
     )
 
     save_calibrations(
         calibration,
     )
 
-    dataset = add_oil_wise_factor_prediction(
+    dataset = add_global_cd_prediction(
         dataset,
         calibration,
     )
@@ -88,7 +88,7 @@ def run_oil_wise(
 
     predictions = build_prediction_table(
         dataset,
-        ssmd_model_version=OIL_WISE_FACTOR_VERSION,
+        ssmd_model_version=GLOBAL_CD_VERSION,
     )
 
     save_predictions(

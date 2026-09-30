@@ -4,24 +4,67 @@ import numpy as np
 import pandas as pd
 
 from upscaling_app.upscaling.ssmd.physics.model import (
-    EXPONENT,
     add_sintef_eta,
+    momentum_response,
 )
 
-REGIME_KEYS = [
-    "nozzle_diameter",
-    "has_gas",
-]
+
+def _require_columns(
+    data: pd.DataFrame,
+    columns: list[str],
+    *,
+    source: str,
+) -> None:
+    missing = [column for column in columns if column not in data.columns]
+
+    if missing:
+        raise ValueError(f"{source} is missing required columns: {missing}")
+
+
+def _prepare_regression_data(
+    dataset: pd.DataFrame,
+) -> pd.DataFrame:
+    _require_columns(
+        dataset,
+        [
+            "oil_id",
+            "has_gas",
+            "momentum_amplification",
+            "oil_viscosity",
+            "untreated_ift",
+            "dR_measured",
+        ],
+        source="SSMD calibration dataset",
+    )
+
+    return add_sintef_eta(
+        dataset,
+    )
 
 
 def _build_regression_arrays(
     dataset: pd.DataFrame,
 ) -> tuple[np.ndarray, np.ndarray]:
-    momentum_term = (dataset["eta"] * dataset["momentum_amplification"]) ** EXPONENT
+    momentum = momentum_response(
+        eta=dataset["eta"],
+        momentum_amplification=dataset["momentum_amplification"],
+    )
 
-    x = (dataset["oil_viscosity"] / dataset["untreated_ift"]).to_numpy()
+    x = (dataset["oil_viscosity"] / dataset["untreated_ift"]).to_numpy(
+        dtype=float,
+    )
 
-    y = (dataset["dR_measured"] / momentum_term).to_numpy()
+    y = (
+        dataset["dR_measured"].to_numpy(
+            dtype=float,
+        )
+        / momentum
+    )
+
+    invalid = ~np.isfinite(x) | ~np.isfinite(y)
+
+    if invalid.any():
+        raise ValueError("Non-finite values found in the SSMD regression variables.")
 
     return x, y
 
@@ -30,6 +73,15 @@ def _fit_linear_cd(
     x: np.ndarray,
     y: np.ndarray,
 ) -> tuple[float, float]:
+    if x.ndim != 1 or y.ndim != 1:
+        raise ValueError("SSMD regression arrays must be one-dimensional.")
+
+    if len(x) != len(y):
+        raise ValueError("SSMD regression arrays must have the same length.")
+
+    if len(x) < 2:
+        raise ValueError("At least two observations are required to fit global c,d.")
+
     design_matrix = np.column_stack(
         [
             np.ones_like(x),
@@ -45,49 +97,32 @@ def _fit_linear_cd(
 
     c_coef, d_coef = coefficients
 
-    return float(c_coef), float(d_coef)
+    if not (np.isfinite(c_coef) and np.isfinite(d_coef)):
+        raise ValueError("SSMD global regression produced non-finite coefficients.")
 
+    fitted_factor = c_coef + d_coef * x
 
-def fit_cd_by_regime(
-    dataset: pd.DataFrame,
-) -> pd.DataFrame:
-    data = add_sintef_eta(dataset)
-
-    rows = []
-
-    for regime, group in data.groupby(
-        REGIME_KEYS,
-        sort=True,
-    ):
-        nozzle_diameter, has_gas = regime
-
-        x, y = _build_regression_arrays(group)
-
-        c_coef, d_coef = _fit_linear_cd(
-            x,
-            y,
+    if ~np.all(np.isfinite(fitted_factor)) or np.any(fitted_factor <= 0.0):
+        raise ValueError(
+            "SSMD global regression produced a non-positive property factor."
         )
 
-        rows.append(
-            {
-                "nozzle_diameter": nozzle_diameter,
-                "has_gas": has_gas,
-                "eta": float(group["eta"].iloc[0]),
-                "c_coef": c_coef,
-                "d_coef": d_coef,
-                "n_experiments": len(group),
-            }
-        )
-
-    return pd.DataFrame(rows)
+    return (
+        float(c_coef),
+        float(d_coef),
+    )
 
 
 def fit_cd_global(
     dataset: pd.DataFrame,
 ) -> pd.DataFrame:
-    data = add_sintef_eta(dataset)
+    data = _prepare_regression_data(
+        dataset,
+    )
 
-    x, y = _build_regression_arrays(data)
+    x, y = _build_regression_arrays(
+        data,
+    )
 
     c_coef, d_coef = _fit_linear_cd(
         x,
@@ -108,58 +143,66 @@ def fit_cd_global(
 def fit_oil_wise_factor(
     dataset: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Fit one identifiable SSMD property factor per oil.
-
-    The global Equation-6 regression is
-
-        y = c + d * (mu / sigma)
-
-    with
-
-        y = dR / (eta * A_M)^(-3/5).
-
-    Within one oil, mu/sigma is an oil-level property and does not provide
-    independent information to identify both c and d. The identifiable local
-    quantity is therefore
-
-        k_oil = c + d * (mu / sigma).
-
-    Least squares for an intercept-only local model gives k_oil = mean(y).
-    """
-    data = add_sintef_eta(dataset)
-
-    momentum_term = (
-        data["eta"]
-        * data["momentum_amplification"]
-    ) ** EXPONENT
-
-    local_response = (
-        data["dR_measured"]
-        / momentum_term
+    data = _prepare_regression_data(
+        dataset,
     )
 
-    rows = []
+    momentum = momentum_response(
+        eta=data["eta"],
+        momentum_amplification=data["momentum_amplification"],
+    )
 
-    for oil_id, group in data.assign(
+    local_response = (
+        data["dR_measured"].to_numpy(
+            dtype=float,
+        )
+        / momentum
+    )
+
+    if ~np.all(np.isfinite(local_response)) or np.any(local_response <= 0.0):
+        raise ValueError("Invalid local SSMD response found during oil-wise fitting.")
+
+    prepared = data.assign(
         local_response=local_response,
-    ).groupby(
+    )
+
+    rows: list[dict[str, object]] = []
+
+    for oil_id, group in prepared.groupby(
         "oil_id",
         sort=True,
     ):
-        values = group["local_response"].to_numpy(dtype=float)
+        values = group["local_response"].to_numpy(
+            dtype=float,
+        )
 
-        if not np.all(np.isfinite(values)):
-            raise ValueError(
-                f"Non-finite SSMD local response found for oil {oil_id}."
+        k_coef = float(np.mean(values))
+
+        k_std = (
+            float(
+                np.std(
+                    values,
+                    ddof=1,
+                )
             )
+            if len(values) > 1
+            else 0.0
+        )
 
         rows.append(
             {
                 "oil_id": oil_id,
-                "k_coef": float(np.mean(values)),
-                "k_std": float(np.std(values, ddof=1)) if len(values) > 1 else 0.0,
+                "k_coef": k_coef,
+                "k_std": k_std,
                 "n_experiments": len(group),
             }
         )
 
-    return pd.DataFrame(rows)
+    result = pd.DataFrame(
+        rows,
+    )
+
+    if result.empty:
+        raise ValueError("No oil-wise SSMD factors were fitted.")
+
+    return result
