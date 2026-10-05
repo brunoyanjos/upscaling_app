@@ -9,15 +9,8 @@ def _run_distribution_analysis(
     from upscaling_app.analysis.distributions.pipeline import (
         run_distribution_analysis,
     )
-    from upscaling_app.analysis.distributions.reporting import (
-        print_distribution_analysis_report,
-    )
 
     result = run_distribution_analysis()
-
-    print_distribution_analysis_report(
-        result,
-    )
 
 
 def register_distribution_analysis_commands(

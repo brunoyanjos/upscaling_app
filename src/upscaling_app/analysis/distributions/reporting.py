@@ -1,96 +1,56 @@
-from upscaling_app.analysis.distributions.pipeline import DistributionAnalysisResult
+import pandas as pd
 
 
-def print_distribution_analysis_report(
-    result: DistributionAnalysisResult,
+def print_distribution_reference_report(
+    summary: pd.Series,
+    experiment: pd.Series,
 ) -> None:
-    comparison = result.d50_comparison.copy()
+    print()
+    print("=" * 60)
+    print("Experimental Distribution Reference")
+    print("=" * 60)
 
-    comparison["nozzle_mm"] = comparison["nozzle_diameter"] * 1e3
+    print(f"Experiment ID : {experiment['experiment_id']}")
+    print(f"Oil ID        : {experiment['oil_id']}")
+    print(f"Tag           : {experiment['dispersion_tag']}")
+    print(f"Nozzle        : " f"{experiment['nozzle_diameter'] * 1e3:.1f} mm")
+    print(f"Gas           : {experiment['has_gas']}")
 
-    comparison["measured_d50_mm"] = comparison["measured_d50"] * 1e3
+    print()
+    print("Distribution")
+    print("-" * 60)
 
-    comparison["distribution_d50_mm"] = comparison["d50"] * 1e3
+    print(f"Volume fraction sum : " f"{summary['volume_fraction_sum']:.6f}")
 
-    comparison["error_pct"] = comparison["d50_relative_error"] * 100.0
+    print()
+    print("Quantiles")
+    print("-" * 60)
 
-    comparison["gas"] = comparison["has_gas"].map(
-        {
-            True: "yes",
-            False: "no",
-        }
-    )
+    print(f"D10 : {summary['d10'] * 1e3:.6f} mm")
+    print(f"D50 : {summary['d50'] * 1e3:.6f} mm")
+    print(f"D90 : {summary['d90'] * 1e3:.6f} mm")
 
-    comparison["d_peak_mm"] = comparison["d_peak"] * 1e3
+    print()
+    print("Moments")
+    print("-" * 60)
 
-    comparison["d_peak_error_pct"] = comparison["d_peak_relative_error"] * 100.0
+    print(f"Mean : " f"{summary['mean_diameter'] * 1e3:.6f} mm")
+    print(f"Std  : " f"{summary['std_diameter'] * 1e3:.6f} mm")
+    print(f"CV   : {summary['cv']:.6f}")
+    print(f"Span : {summary['span']:.6f}")
 
-    comparison = comparison.sort_values(
-        [
-            "oil_id",
-            "nozzle_mm",
-            "has_gas",
-        ]
-    )
+    print()
+    print("D50 consistency")
+    print("-" * 60)
 
-    print("\nDISTRIBUTION D50 CHECK")
-    print("=" * 90)
+    measured_d50 = experiment["measured_d50"]
+    distribution_d50 = summary["d50"]
 
-    print(
-        comparison[
-            [
-                "oil_id",
-                "dispersion_tag",
-                "nozzle_mm",
-                "gas",
-                "measured_d50_mm",
-                "distribution_d50_mm",
-                "error_pct",
-                "d_peak_mm",
-                "d_peak_error_pct",
-            ]
-        ].to_string(
-            index=False,
-            formatters={
-                "nozzle_mm": "{:.1f}".format,
-                "measured_d50_mm": "{:.4f}".format,
-                "distribution_d50_mm": "{:.4f}".format,
-                "error_pct": "{:+.2f}".format,
-                "d_peak_mm": "{:.4f}".format,
-                "d_peak_error_pct": "{:+.2f}".format,
-            },
-        )
-    )
+    error_pct = (distribution_d50 - measured_d50) / measured_d50 * 100.0
 
-    suspects = comparison.loc[comparison["d50_relative_error"].abs() > 0.05]
+    print(f"Reported D50     : " f"{measured_d50 * 1e3:.6f} mm")
+    print(f"Distribution D50 : " f"{distribution_d50 * 1e3:.6f} mm")
+    print(f"Difference       : {error_pct:+.3f} %")
 
-    print("\nSUSPICIOUS D50 CASES")
-
-    print("=" * 120)
-
-    print(
-        suspects[
-            [
-                "oil_id",
-                "dispersion_tag",
-                "nozzle_mm",
-                "gas",
-                "measured_d50_mm",
-                "distribution_d50_mm",
-                "error_pct",
-                "d_peak_mm",
-                "d_peak_error_pct",
-                "source_sheet",
-            ]
-        ].to_string(
-            index=False,
-            formatters={
-                "nozzle_mm": "{:.1f}".format,
-                "measured_d50_mm": "{:.4f}".format,
-                "distribution_d50_mm": "{:.4f}".format,
-                "error_pct": "{:+.2f}".format,
-                "d_peak_mm": "{:.4f}".format,
-                "d_peak_error_pct": "{:+.2f}".format,
-            },
-        )
-    )
+    print("=" * 60)
+    print()
