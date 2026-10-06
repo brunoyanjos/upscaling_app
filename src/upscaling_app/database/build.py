@@ -2,6 +2,9 @@ import pandas as pd
 
 from upscaling_app import paths
 from upscaling_app.database.utils.experiment_id import make_experiment_id
+from upscaling_app.database.utils.oil_characterization import (
+    build_oil_characterization_table,
+)
 from upscaling_app.database.utils.tags import (
     dispersion_kind,
     normalize_distribution_tag,
@@ -12,29 +15,122 @@ from upscaling_app.database.utils.tags import (
 def build_oil_properties() -> pd.DataFrame:
     df = pd.read_excel(
         paths.OIL_EXTERNAL_PROPERTIES,
-        header=[0, 1],
+        header=[
+            0,
+            1,
+        ],
     )
 
     database = pd.DataFrame(
         {
-            "oil_id": df[("SINTEF ID", "Unnamed: 0_level_1")]
-            .str.split("-")
-            .str[-1]
-            .astype(int),
-            "oil_name": df[("Petrobras ID", "Unnamed: 1_level_1")],
-            "density": df[("Density\n (Kg/L)", "Unnamed: 2_level_1")] * 1000,
-            "pour_point": df[("Pour Point \n(°C)", "Unnamed: 3_level_1")],
-            "wax_fraction": df[("Wax\n (wght %)", "Unnamed: 4_level_1")] / 100,
-            "asphaltene_fraction": df[("Asphaltene \n(wgth %)", "Unnamed: 5_level_1")]
-            / 100,
-            "viscosity_20c": df[("Viscosity (mPa·s) \nshear rate 10 s⁻¹", "20°C")]
-            * 1e-3,
-            "viscosity_50c": df[("Viscosity (mPa·s) \nshear rate 10 s⁻¹", "50°C")]
-            * 1e-3,
+            "oil_id": (
+                df[
+                    (
+                        "SINTEF ID",
+                        "Unnamed: 0_level_1",
+                    )
+                ]
+                .str.split("-")
+                .str[-1]
+                .astype(int)
+            ),
+            "oil_name": df[
+                (
+                    "Petrobras ID",
+                    "Unnamed: 1_level_1",
+                )
+            ],
+            "density": (
+                df[
+                    (
+                        "Density\n (Kg/L)",
+                        "Unnamed: 2_level_1",
+                    )
+                ]
+                * 1000
+            ),
+            "pour_point": df[
+                (
+                    "Pour Point \n(°C)",
+                    "Unnamed: 3_level_1",
+                )
+            ],
+            "wax_fraction": (
+                df[
+                    (
+                        "Wax\n (wght %)",
+                        "Unnamed: 4_level_1",
+                    )
+                ]
+                / 100
+            ),
+            "asphaltene_fraction": (
+                df[
+                    (
+                        "Asphaltene \n(wgth %)",
+                        "Unnamed: 5_level_1",
+                    )
+                ]
+                / 100
+            ),
+            "viscosity_20c": (
+                df[
+                    (
+                        "Viscosity (mPa·s) \n" "shear rate 10 s⁻¹",
+                        "20°C",
+                    )
+                ]
+                * 1e-3
+            ),
+            "viscosity_50c": (
+                df[
+                    (
+                        "Viscosity (mPa·s) \n" "shear rate 10 s⁻¹",
+                        "50°C",
+                    )
+                ]
+                * 1e-3
+            ),
         }
     )
 
-    paths.DATABASE_DIR.mkdir(parents=True, exist_ok=True)
+    characterization = build_oil_characterization_table(
+        oil_reference_path=(paths.OIL_REFERENCE_PATH),
+        property_directory=(paths.OIL_DETAILED_PROPERTIES_DIR),
+    )
+
+    base_ids = set(database["oil_id"].astype(int))
+
+    characterization_ids = set(characterization["oil_id"].astype(int))
+
+    if base_ids != characterization_ids:
+        missing_characterization = sorted(base_ids - characterization_ids)
+
+        unexpected_characterization = sorted(characterization_ids - base_ids)
+
+        raise ValueError(
+            "Oil characterization IDs do not "
+            "match oil properties IDs. "
+            "Missing characterization: "
+            f"{missing_characterization}; "
+            "unexpected characterization: "
+            f"{unexpected_characterization}"
+        )
+
+    database = database.merge(
+        characterization,
+        on="oil_id",
+        how="left",
+        validate="one_to_one",
+    )
+
+    if database["assay_source_file"].isna().any():
+        raise ValueError("Missing detailed oil characterization " "after merge.")
+
+    paths.DATABASE_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
     database.to_excel(
         paths.OIL_PROPERTIES_DATABASE,

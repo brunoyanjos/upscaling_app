@@ -1,490 +1,150 @@
 from dataclasses import dataclass
 
-import numpy as np
+from upscaling_app import paths
 import pandas as pd
 
-from upscaling_app import paths
-
-from upscaling_app.analysis.distributions.data import (
+from upscaling_app.analysis.distributions.analysis import (
+    compare_distribution_fit_methods,
+    evaluate_distribution_fits,
+    summarize_distribution_fit_metrics,
+    summarize_fit_method_comparison_by_regime,
+    test_distribution_fit_improvement,
+)
+from upscaling_app.analysis.experimental.data import (
     load_distributions,
     load_experiments,
 )
-from upscaling_app.analysis.distributions.descriptive import (
-    discrete_moments,
-    discrete_shape_statistics,
-    empirical_cdf,
-    empirical_quantile,
-    experimental_pdf,
-    summarize_distribution,
-    summarize_distributions,
-    volume_to_number_fraction,
+
+from upscaling_app.analysis.distributions.persistence import (
+    save_distribution_fit_evaluation,
+    save_distribution_method_comparison,
 )
 from upscaling_app.analysis.distributions.plotting import (
-    plot_distribution_cdf_comparison,
-    plot_distribution_pdf_comparison,
-    plot_number_pdf,
-    plot_number_pdf_comparison,
-    plot_suspicious_distributions,
-    plot_volume_number_cdf,
+    save_method_improvement_by_regime_plot,
+    save_method_win_fraction_plot,
 )
-from upscaling_app.analysis.distributions.rosin_rammler import (
-    estimate_rosin_rammler_from_moments,
-    rosin_rammler_cdf,
-    rosin_rammler_moments,
-    rosin_rammler_pdf,
-    rosin_rammler_quantile,
-    rosin_rammler_shape_statistics,
-)
-from upscaling_app.analysis.distributions.validation import (
-    add_reported_d50_percentile,
-    cdf_error_metrics,
-    compare_distribution_d50,
-)
+
+EXPERIMENT_METADATA_COLUMNS = [
+    "experiment_id",
+    "oil_id",
+    "dispersion_kind",
+    "dispersion_tag",
+    "nozzle_diameter",
+    "has_gas",
+    "measured_d50",
+]
 
 
 @dataclass(frozen=True)
-class DistributionAnalysisResult:
-    data: pd.DataFrame
+class DistributionFitAnalysisResult:
+    parameters: pd.DataFrame
+    evaluation: pd.DataFrame
     summary: pd.DataFrame
-    d50_comparison: pd.DataFrame
+    comparison: pd.DataFrame
+    comparison_summary: pd.DataFrame
+    comparison_by_regime: pd.DataFrame
+    statistical_comparison: pd.DataFrame
 
 
-@dataclass(frozen=True)
-class DistributionReferenceResult:
-    experiment: pd.Series
-    distribution: pd.DataFrame
-    summary: pd.Series
+def _select_experiment_metadata(
+    experiments: pd.DataFrame,
+) -> pd.DataFrame:
+    missing = [
+        column
+        for column in EXPERIMENT_METADATA_COLUMNS
+        if column not in experiments.columns
+    ]
 
-    # Volume-based Rosin-Rammler
-    rr_shape: float
-    rr_scale: float
-    rr_mean: float
-    rr_std: float
-    rr_d10: float
-    rr_d50: float
-    rr_d90: float
+    if missing:
+        raise ValueError("Missing experiment metadata columns: " + ", ".join(missing))
 
-    experimental_skewness: float
-    experimental_kurtosis: float
-    rr_skewness: float
-    rr_kurtosis: float
+    metadata = experiments[EXPERIMENT_METADATA_COLUMNS].copy()
 
-    experimental_cdf: np.ndarray
-    rr_cdf: np.ndarray
-    cdf_rmse: float
-    cdf_max_error: float
-    cdf_max_error_index: int
+    if metadata["experiment_id"].duplicated().any():
+        raise ValueError("experiments contains duplicated experiment_id values.")
 
-    pdf_edges: np.ndarray
-    experimental_density: np.ndarray
-    pdf_integral: float
-
-    # Number-based experimental distribution
-    number_fraction: np.ndarray
-    number_mean: float
-    number_std: float
-    number_d10: float
-    number_d50: float
-    number_d90: float
-    d50_number_to_volume: float
-
-    number_cdf: np.ndarray
-    number_pdf_edges: np.ndarray
-    number_density: np.ndarray
-    number_pdf_integral: float
-
-    # Number-based Rosin-Rammler
-    number_rr_shape: float
-    number_rr_scale: float
-    number_rr_mean: float
-    number_rr_std: float
-    number_rr_d10: float
-    number_rr_d50: float
-    number_rr_d90: float
-
-    number_rr_cdf: np.ndarray
-    number_cdf_rmse: float
-    number_cdf_max_error: float
-    number_cdf_max_error_index: int
-
-    number_rr_diameter: np.ndarray
-    number_rr_density: np.ndarray
+    return metadata
 
 
-def run_distribution_analysis() -> DistributionAnalysisResult:
+def run_distribution_fit_analysis(
+    parameters: pd.DataFrame,
+) -> DistributionFitAnalysisResult:
     distributions = load_distributions()
     experiments = load_experiments()
 
-    summary = summarize_distributions(
-        distributions,
-    )
-
-    d50_comparison = compare_distribution_d50(
-        summary,
-        experiments,
-    )
-
-    d50_comparison = add_reported_d50_percentile(
-        comparison=d50_comparison,
+    evaluation = evaluate_distribution_fits(
         distributions=distributions,
+        parameters=parameters,
     )
 
-    return DistributionAnalysisResult(
-        data=distributions,
+    metadata = _select_experiment_metadata(experiments)
+
+    evaluation = metadata.merge(
+        evaluation,
+        on="experiment_id",
+        how="inner",
+        validate="one_to_one",
+    )
+
+    if len(evaluation) != len(parameters):
+        raise ValueError(
+            "Not all fitted distributions could be matched to experiment metadata."
+        )
+
+    evaluation = evaluation.sort_values(
+        [
+            "dispersion_kind",
+            "oil_id",
+            "experiment_id",
+        ]
+    ).reset_index(drop=True)
+
+    summary = summarize_distribution_fit_metrics(evaluation)
+
+    (
+        comparison,
+        comparison_summary,
+    ) = compare_distribution_fit_methods(evaluation)
+
+    comparison_by_regime = summarize_fit_method_comparison_by_regime(comparison)
+
+    statistical_comparison = test_distribution_fit_improvement(comparison)
+
+    return DistributionFitAnalysisResult(
+        parameters=parameters.copy(),
+        evaluation=evaluation,
         summary=summary,
-        d50_comparison=d50_comparison,
+        comparison=comparison,
+        comparison_summary=comparison_summary,
+        comparison_by_regime=comparison_by_regime,
+        statistical_comparison=statistical_comparison,
     )
 
 
-def run_distribution_workflow() -> DistributionAnalysisResult:
-    result = run_distribution_analysis()
+def run_distribution_fit_workflow(
+    parameters: pd.DataFrame,
+) -> DistributionFitAnalysisResult:
+    result = run_distribution_fit_analysis(parameters=parameters)
 
-    plot_suspicious_distributions(
-        distributions=result.data,
-        comparison=result.d50_comparison,
-        output_dir=(paths.RESULTS_DIR / "distributions" / "d50_checks"),
+    save_distribution_fit_evaluation(result.evaluation)
+
+    save_distribution_method_comparison(
+        global_summary=result.summary,
+        paired_comparison=result.comparison,
+        by_regime=result.comparison_by_regime,
+        statistical_tests=result.statistical_comparison,
     )
 
-    return result
-
-
-def run_distribution_reference_analysis(
-    experiment_id: str,
-) -> DistributionReferenceResult:
-    distributions = load_distributions()
-    experiments = load_experiments()
-
-    distribution = distributions[distributions["experiment_id"] == experiment_id]
-
-    experiment = experiments[experiments["experiment_id"] == experiment_id]
-
-    if distribution.empty:
-        raise ValueError(f"Distribution not found for {experiment_id}.")
-
-    if experiment.empty:
-        raise ValueError(f"Experiment not found for {experiment_id}.")
-
-    experiment = experiment.iloc[0]
-
-    distribution = distribution.sort_values("droplet_diameter")
-
-    diameter = distribution["droplet_diameter"].to_numpy(dtype=float)
-
-    fraction = distribution["volume_fraction"].to_numpy(dtype=float)
-
-    # =========================================================
-    # Experimental volume-based reference
-    # =========================================================
-
-    summary = summarize_distribution(distribution)
-
-    mean = summary["mean_diameter"]
-    std = summary["std_diameter"]
-
-    (
-        experimental_skewness,
-        experimental_kurtosis,
-    ) = discrete_shape_statistics(
-        diameter=diameter,
-        fraction=fraction,
+    save_method_win_fraction_plot(
+        comparison_summary=(result.comparison_summary),
+        output=(paths.DISTRIBUTION_ANALYSIS_FIGURES_DIR / "method_win_fraction.png"),
     )
 
-    experimental_cdf = empirical_cdf(fraction)
-
-    (
-        _,
-        pdf_edges,
-        experimental_density,
-    ) = experimental_pdf(
-        diameter=diameter,
-        fraction=fraction,
-    )
-
-    pdf_widths = np.diff(pdf_edges)
-
-    pdf_integral = float(np.sum(experimental_density * pdf_widths))
-
-    # =========================================================
-    # Rosin-Rammler — volume basis
-    # =========================================================
-
-    shape, scale = estimate_rosin_rammler_from_moments(
-        mean=mean,
-        std=std,
-    )
-
-    rr_mean, rr_std = rosin_rammler_moments(
-        shape=shape,
-        scale=scale,
-    )
-
-    rr_d10 = rosin_rammler_quantile(
-        quantile=0.10,
-        shape=shape,
-        scale=scale,
-    )
-
-    rr_d50 = rosin_rammler_quantile(
-        quantile=0.50,
-        shape=shape,
-        scale=scale,
-    )
-
-    rr_d90 = rosin_rammler_quantile(
-        quantile=0.90,
-        shape=shape,
-        scale=scale,
-    )
-
-    (
-        rr_skewness,
-        rr_kurtosis,
-    ) = rosin_rammler_shape_statistics(
-        shape=shape,
-        scale=scale,
-    )
-
-    rr_cdf = rosin_rammler_cdf(
-        diameter=diameter,
-        shape=shape,
-        scale=scale,
-    )
-
-    (
-        cdf_rmse,
-        cdf_max_error,
-        cdf_max_error_index,
-    ) = cdf_error_metrics(
-        reference=experimental_cdf,
-        prediction=rr_cdf,
-    )
-
-    # =========================================================
-    # Experimental number-based representation
-    # =========================================================
-
-    number_fraction = volume_to_number_fraction(
-        diameter=diameter,
-        volume_fraction=fraction,
-    )
-
-    (
-        number_mean,
-        _,
-        number_std,
-    ) = discrete_moments(
-        diameter=diameter,
-        fraction=number_fraction,
-    )
-
-    number_d10 = empirical_quantile(
-        diameter=diameter,
-        fraction=number_fraction,
-        quantile=0.10,
-    )
-
-    number_d50 = empirical_quantile(
-        diameter=diameter,
-        fraction=number_fraction,
-        quantile=0.50,
-    )
-
-    number_d90 = empirical_quantile(
-        diameter=diameter,
-        fraction=number_fraction,
-        quantile=0.90,
-    )
-
-    d50_number_to_volume = number_d50 / summary["d50"]
-
-    number_cdf = empirical_cdf(number_fraction)
-
-    (
-        _,
-        number_pdf_edges,
-        number_density,
-    ) = experimental_pdf(
-        diameter=diameter,
-        fraction=number_fraction,
-    )
-
-    number_pdf_widths = np.diff(number_pdf_edges)
-
-    number_pdf_integral = float(np.sum(number_density * number_pdf_widths))
-
-    # =========================================================
-    # Rosin-Rammler — number basis
-    # =========================================================
-
-    (
-        number_rr_shape,
-        number_rr_scale,
-    ) = estimate_rosin_rammler_from_moments(
-        mean=number_mean,
-        std=number_std,
-    )
-
-    (
-        number_rr_mean,
-        number_rr_std,
-    ) = rosin_rammler_moments(
-        shape=number_rr_shape,
-        scale=number_rr_scale,
-    )
-
-    number_rr_d10 = rosin_rammler_quantile(
-        quantile=0.10,
-        shape=number_rr_shape,
-        scale=number_rr_scale,
-    )
-
-    number_rr_d50 = rosin_rammler_quantile(
-        quantile=0.50,
-        shape=number_rr_shape,
-        scale=number_rr_scale,
-    )
-
-    number_rr_d90 = rosin_rammler_quantile(
-        quantile=0.90,
-        shape=number_rr_shape,
-        scale=number_rr_scale,
-    )
-
-    number_rr_cdf = rosin_rammler_cdf(
-        diameter=diameter,
-        shape=number_rr_shape,
-        scale=number_rr_scale,
-    )
-
-    (
-        number_cdf_rmse,
-        number_cdf_max_error,
-        number_cdf_max_error_index,
-    ) = cdf_error_metrics(
-        reference=number_cdf,
-        prediction=number_rr_cdf,
-    )
-
-    number_rr_diameter = np.geomspace(
-        number_pdf_edges[0],
-        number_pdf_edges[-1],
-        1000,
-    )
-
-    number_rr_density = rosin_rammler_pdf(
-        diameter=number_rr_diameter,
-        shape=number_rr_shape,
-        scale=number_rr_scale,
-    )
-
-    return DistributionReferenceResult(
-        experiment=experiment,
-        distribution=distribution,
-        summary=summary,
-        # Volume RR
-        rr_shape=shape,
-        rr_scale=scale,
-        rr_mean=rr_mean,
-        rr_std=rr_std,
-        rr_d10=rr_d10,
-        rr_d50=rr_d50,
-        rr_d90=rr_d90,
-        experimental_skewness=experimental_skewness,
-        experimental_kurtosis=experimental_kurtosis,
-        rr_skewness=rr_skewness,
-        rr_kurtosis=rr_kurtosis,
-        experimental_cdf=experimental_cdf,
-        rr_cdf=rr_cdf,
-        cdf_rmse=cdf_rmse,
-        cdf_max_error=cdf_max_error,
-        cdf_max_error_index=cdf_max_error_index,
-        pdf_edges=pdf_edges,
-        experimental_density=experimental_density,
-        pdf_integral=pdf_integral,
-        # Number experimental
-        number_fraction=number_fraction,
-        number_mean=number_mean,
-        number_std=number_std,
-        number_d10=number_d10,
-        number_d50=number_d50,
-        number_d90=number_d90,
-        d50_number_to_volume=d50_number_to_volume,
-        number_cdf=number_cdf,
-        number_pdf_edges=number_pdf_edges,
-        number_density=number_density,
-        number_pdf_integral=number_pdf_integral,
-        # Number RR
-        number_rr_shape=number_rr_shape,
-        number_rr_scale=number_rr_scale,
-        number_rr_mean=number_rr_mean,
-        number_rr_std=number_rr_std,
-        number_rr_d10=number_rr_d10,
-        number_rr_d50=number_rr_d50,
-        number_rr_d90=number_rr_d90,
-        number_rr_cdf=number_rr_cdf,
-        number_cdf_rmse=number_cdf_rmse,
-        number_cdf_max_error=number_cdf_max_error,
-        number_cdf_max_error_index=number_cdf_max_error_index,
-        number_rr_diameter=number_rr_diameter,
-        number_rr_density=number_rr_density,
-    )
-
-
-def run_distribution_reference_workflow(
-    experiment_id: str,
-) -> DistributionReferenceResult:
-    result = run_distribution_reference_analysis(experiment_id)
-
-    diameter = result.distribution["droplet_diameter"].to_numpy(dtype=float)
-
-    output_dir = paths.RESULTS_DIR / "distributions" / "reference_check"
-
-    # =========================================================
-    # Volume-based diagnostics
-    # =========================================================
-
-    plot_distribution_cdf_comparison(
-        diameter=diameter,
-        experimental_cdf=result.experimental_cdf,
-        rr_cdf=result.rr_cdf,
-        output=(output_dir / f"{experiment_id}_volume_cdf.png"),
-    )
-
-    plot_distribution_pdf_comparison(
-        edges=result.pdf_edges,
-        experimental_density=result.experimental_density,
-        shape=result.rr_shape,
-        scale=result.rr_scale,
-        output=(output_dir / f"{experiment_id}_volume_pdf.png"),
-    )
-
-    # =========================================================
-    # Volume vs number
-    # =========================================================
-
-    plot_volume_number_cdf(
-        diameter=diameter,
-        volume_cdf=result.experimental_cdf,
-        number_cdf=result.number_cdf,
-        output=(output_dir / f"{experiment_id}_volume_number_cdf.png"),
-    )
-
-    # =========================================================
-    # Number-based diagnostics
-    # =========================================================
-
-    plot_number_pdf(
-        edges=result.number_pdf_edges,
-        density=result.number_density,
-        output=(output_dir / f"{experiment_id}_number_pdf.png"),
-    )
-
-    plot_number_pdf_comparison(
-        edges=result.number_pdf_edges,
-        experimental_density=result.number_density,
-        rr_diameter=result.number_rr_diameter,
-        rr_density=result.number_rr_density,
-        output=(output_dir / f"{experiment_id}_number_rr_pdf.png"),
+    save_method_improvement_by_regime_plot(
+        comparison_by_regime=(result.comparison_by_regime),
+        output=(
+            paths.DISTRIBUTION_ANALYSIS_FIGURES_DIR / "method_improvement_by_regime.png"
+        ),
     )
 
     return result
