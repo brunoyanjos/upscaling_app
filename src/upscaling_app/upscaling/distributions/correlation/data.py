@@ -40,7 +40,6 @@ def _require_columns(
 
 
 def load_distribution_parameters() -> pd.DataFrame:
-    """Load the fitted shape parameter used by the correlation model."""
     parameters = load_fitted_distribution_parameters()
 
     shape = parameters["shape"].to_numpy(dtype=float)
