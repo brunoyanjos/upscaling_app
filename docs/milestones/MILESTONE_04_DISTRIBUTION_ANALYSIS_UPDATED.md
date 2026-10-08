@@ -1,23 +1,25 @@
 # Milestone 4 — Droplet-Size Distribution Analysis
 
-**Status:** Completed — experimental analysis and Rosin–Rammler fitting foundation
+**Status:** Completed — stable direct-CDF Rosin–Rammler fitting and distribution analysis
 
 ## Objective
 
-Establish a reproducible workflow for experimental droplet-size distribution analysis and Rosin–Rammler parameter estimation using the normalized project databases.
+Establish a reproducible workflow for measured droplet-size distributions and Rosin–Rammler parameter estimation using only normalized project databases.
 
-The stable workflow is:
+The final stable workflow is:
 
 ```text
 normalized distributions
         ↓
-experimental distribution analysis
+empirical CDF at original droplet diameters
         ↓
-Rosin–Rammler parameter estimation
+direct Rosin–Rammler CDF fit
         ↓
-fit-quality evaluation
+persist shape and scale
         ↓
-persisted distribution parameters
+fit-quality and D50 analysis
+        ↓
+reports and figures
 ```
 
 Raw experimental spreadsheets remain confined to the database layer.
@@ -41,7 +43,7 @@ droplet_diameter
 volume_fraction
 ```
 
-Experimental metadata include:
+Experimental metadata include fields such as:
 
 ```text
 experiment_id
@@ -70,79 +72,42 @@ The current dataset contains:
 10 oils
 ```
 
-Zero-valued bins are retained in the normalized database.
+Zero-valued bins remain in the normalized database.
 
 ---
 
-## 4.2 Experimental Distribution Analysis
+## 4.2 Experimental CDF Representation
 
-The stable experimental workflow evaluates each measured distribution directly, without introducing an analytical distribution model.
-
-Calculated quantities include:
-
-```text
-D10
-D50
-D90
-d_peak
-volume-weighted mean diameter
-volume-weighted standard deviation
-span
-volume-fraction sum
-```
-
-The span is defined as:
+For each experiment, the volume fractions are normalized and accumulated as:
 
 \[
-span =
-\frac{D_{90}-D_{10}}{D_{50}}.
+F_i=\sum_{j\le i}w_j.
 \]
 
-The experimental quantiles are reconstructed from the cumulative volume distribution.
+The decisive representation convention is:
 
-For a target probability \(q\), with:
+> The empirical CDF values are associated directly with the original measured `droplet_diameter` coordinates.
+
+Therefore the stable fitting coordinates are:
 
 \[
-F_0 < q \leq F_1,
+(d_i,F_i).
 \]
 
-linear interpolation is used:
+The production workflow does **not** shift the CDF to geometric upper bin edges.
 
-\[
-d_q
-=
-d_0
-+
-\frac{q-F_0}{F_1-F_0}
-(d_1-d_0).
-\]
-
-For the median:
-
-\[
-q=0.5.
-\]
-
-The reconstructed distribution \(D_{50}\) agrees closely with the reported experimental \(D_{50}\) for most experiments.
-
-A limited subset of experiments exhibits substantial disagreement, primarily associated with specific SSMD cases. These cases remain diagnostic observations and do not modify the normalized database.
+This convention was selected after an explicit coordinate study comparing original diameters with an upper-edge interpretation.
 
 ---
 
 ## 4.3 Rosin–Rammler Model
 
-The analytical distribution adopted as the reference model is the two-parameter Rosin–Rammler distribution:
+The analytical reference is the two-parameter Rosin–Rammler / Weibull distribution:
 
 \[
 F(d)
 =
-1 -
-\exp
-\left[
--\left(
-\frac{d}{\lambda}
-\right)^k
-\right].
+1-\exp\left[-\left(\frac{d}{\lambda}\right)^k\right].
 \]
 
 where:
@@ -157,223 +122,292 @@ The corresponding median is:
 \[
 D_{50}
 =
-\lambda
-(\ln 2)^{1/k}.
-\]
-
-Therefore:
-
-\[
-\lambda
-=
-\frac{D_{50}}
-{(\ln 2)^{1/k}}.
+\lambda(\ln2)^{1/k}.
 \]
 
 ---
 
-## 4.4 Direct CDF Parameter Estimation
+## 4.4 Stable Parameter Estimation
 
-The production-reference fitting method estimates \(k\) and \(\lambda\) directly from the measured cumulative volume distribution.
-
-The experimental CDF is:
-
-\[
-F_i
-=
-\sum_{j \leq i} w_j.
-\]
-
-The parameters are obtained by minimizing:
+The production estimator fits the Rosin–Rammler CDF directly to the empirical cumulative distribution:
 
 \[
 \min_{k,\lambda}
 \sum_i
 \left[
-F_{\mathrm{RR}}(d_i;k,\lambda)
--
-F_i
+F_{RR}(d_i;k,\lambda)-F_i
 \right]^2.
 \]
 
 The optimization imposes:
 
 \[
-k > 0,
+k>0,
 \qquad
-\lambda > 0.
+\lambda>0.
 \]
 
-This method avoids introducing an intermediate continuous representation of the measured discrete distribution.
+No intermediate continuous reconstruction is required before fitting.
 
-The fitted parameters are stored as:
-
-```text
-cdf_shape
-cdf_scale
-```
+The stable workflow returns one parameter pair per experiment.
 
 ---
 
-## 4.5 Discrete-Moment Reference Estimator
+## 4.5 Resolved Methodological Comparisons
 
-A second estimator is retained as a methodological reference.
+Two questions were explicitly investigated before the milestone was closed.
 
-The measured volume fractions are normalized:
+### Coordinate convention
 
-\[
-w_i
-=
-\frac{v_i}
-{\sum_j v_j}.
-\]
-
-The discrete mean and variance are:
-
-\[
-\mu
-=
-\sum_i w_i d_i,
-\]
-
-\[
-\sigma^2
-=
-\sum_i
-w_i(d_i-\mu)^2.
-\]
-
-For a Rosin–Rammler / Weibull distribution:
-
-\[
-CV^2
-=
-\frac{
-\Gamma(1+2/k)
-}{
-\Gamma^2(1+1/k)
-}
--1.
-\]
-
-The shape parameter is obtained numerically from this equation and the scale is subsequently calculated from:
-
-\[
-\lambda
-=
-\frac{\mu}
-{\Gamma(1+1/k)}.
-\]
-
-The corresponding persisted parameters are:
+The direct fit was compared using:
 
 ```text
-moment_shape
-moment_scale
+point
+    original droplet diameters
+
+upper
+    geometric upper bin edges
 ```
 
-This method is retained as a reference estimator rather than the production fitting method.
+Using the original diameters produced substantially better D50 agreement with both the reported experimental median and, more importantly, the median reconstructed directly from the stored distribution.
+
+For fitted D50 versus distribution-reconstructed D50:
+
+```text
+point
+    MAPE ≈ 4.59 %
+    R²   ≈ 0.9985
+
+upper
+    MAPE ≈ 12.73 %
+    R²   ≈ 0.9835
+```
+
+The stable convention is therefore `point`.
+
+### Moment-based estimator
+
+A discrete-moment Rosin–Rammler estimator was also evaluated as a methodological alternative.
+
+It did not outperform the direct CDF fit for the selected reconstruction objectives, including D50 agreement and CDF fidelity.
+
+It was therefore removed from the stable production workflow rather than retained as a second persisted estimator.
+
+Historical or exploratory moment-based comparisons may remain in research material, but they are not part of the Milestone-4 contract.
 
 ---
 
 ## 4.6 Persisted Parameters
 
-The distribution fitting workflow produces one row per experiment with:
+The fitting workflow persists one row per experiment with:
 
 ```text
 experiment_id
+shape
+scale
+```
+
+The deterministic `experiment_id` preserves the relationship between fitted parameters and the normalized experimental condition.
+
+No production columns named:
+
+```text
 cdf_shape
 cdf_scale
 moment_shape
 moment_scale
 ```
 
-The deterministic `experiment_id` preserves the relationship between distribution parameters and experimental conditions.
+are required by the stable contract.
 
 ---
 
 ## 4.7 Fit Evaluation
 
-The analytical Rosin–Rammler distribution is evaluated against the original experimental cumulative distribution.
+The fitted Rosin–Rammler CDF is evaluated against the original empirical CDF at the same original diameter coordinates used during fitting.
 
-The principal diagnostics include:
+Principal fit diagnostics include:
 
 ```text
 CDF RMSE
-maximum CDF deviation
-paired method comparison
-comparison by dispersion regime
+CDF maximum absolute error
+fitted D50
+D50 agreement metrics
+representative CDF figures
+representative PDF figures
 ```
 
-The direct CDF fit currently serves as the production-reference Rosin–Rammler parameterization.
-
-The discrete-moment estimator remains available for methodological comparison.
-
----
-
-## 4.8 D50 Consistency
-
-For each fitted Rosin–Rammler model:
-
-\[
-D_{50,\mathrm{RR}}
-=
-\lambda
-(\ln 2)^{1/k}.
-\]
-
-This allows direct comparison between:
+Current mean CDF RMSE across the 180 distributions is approximately:
 
 ```text
-reported experimental D50
-distribution-reconstructed D50
-Rosin–Rammler fitted D50
+0.017585
 ```
 
-The purpose of this comparison is diagnostic.
-
-The experimentally reported `measured_d50` remains the experimental reference quantity used by the SSDI and SSMD modelling pipelines.
+This metric is a fit-quality diagnostic. It is not predictive validation of an unseen experiment or oil.
 
 ---
 
-## 4.9 Stable Package Structure
+## 4.8 D50 References
+
+Three distinct median diameters must remain conceptually separate.
+
+### Reported D50
+
+```text
+measured_d50
+```
+
+Stored in the normalized experiment database and used by the SSDI and SSMD modelling workflows.
+
+### Distribution-reconstructed D50
+
+Calculated directly from the measured cumulative distribution by interpolation on the original `droplet_diameter` coordinates.
+
+This is the **primary reference for evaluating whether the Rosin–Rammler fit reproduces the stored distribution**.
+
+### Fitted D50
+
+Calculated from fitted parameters:
+
+\[
+D_{50,fit}=\lambda(\ln2)^{1/k}.
+\]
+
+Current agreement of fitted D50 against distribution-reconstructed D50 is approximately:
+
+```text
+n          = 180
+RMSE       = 0.025932 mm
+MAE        = 0.016420 mm
+MAPE       = 4.590485 %
+R²         = 0.998529
+Log-MSE    = 0.003792
+R²_log     = 0.995474
+```
+
+---
+
+## 4.9 Reported-vs-Distribution D50 Diagnostic
+
+The reported experimental median and the median reconstructed from the stored distribution agree closely for most experiments but not all.
+
+Current source-consistency diagnostic:
+
+```text
+MAPE       ≈ 4.906453 %
+Median APE ≈ 0.378740 %
+Max APE    ≈ 191.524727 %
+```
+
+The very large maximum error comes from a limited subset of source inconsistencies, primarily in specific SSMD cases.
+
+These differences remain diagnostic observations.
+
+The workflow must not silently alter `measured_d50` or the normalized distributions to force agreement.
+
+---
+
+## 4.10 PDF and Bin Representation
+
+The Rosin–Rammler model is fitted to the CDF, not to a PDF or bin-mass objective.
+
+Geometric bin edges remain useful when a continuous or binned PDF representation is needed for visualization:
+
+\[
+b_{i+1/2}=\sqrt{d_i d_{i+1}}.
+\]
+
+These edges are not used to relocate the empirical CDF in the stable fitting workflow.
+
+The PDF is therefore interpreted primarily as a shape diagnostic.
+
+This distinction is important because a fitted CDF may be good while a local PDF view exposes secondary peaks, multimodality, or other shape structure that a two-parameter Rosin–Rammler distribution cannot reproduce exactly.
+
+---
+
+## 4.11 Representative Figures
+
+Representative distributions are selected from the already-calculated fit evaluation.
+
+The standard visual interpretation is:
+
+```text
+CDF
+    experimental points at original diameters
+    +
+    continuous Rosin–Rammler fit
+
+PDF
+    experimental binned representation
+    +
+    continuous Rosin–Rammler density
+```
+
+Plotting uses the shared project visual language:
+
+```text
+Untreated       petroleum / dark neutral
+SSMD            blue
+SSDI C9500      orange
+SSDI IBC        yellow
+Rosin–Rammler   neutral gray
+identity        light gray
+```
+
+The plotting layer performs presentation operations only and does not fit models or calculate scientific metrics.
+
+---
+
+## 4.12 Stable Package Structure
+
+The stable modelling package contains the Rosin–Rammler formulation, empirical representation helpers, fitting, orchestration, persistence, and concise reporting.
 
 ```text
 src/upscaling_app/upscaling/distributions/
+├── __init__.py
 ├── rosin_rammler.py
+├── representation.py
 ├── fitting.py
 ├── pipeline.py
-└── persistence.py
-
-src/upscaling_app/analysis/distributions/
-├── data.py
-├── descriptive.py
-├── validation.py
-├── plotting.py
-├── reporting.py
-└── pipeline.py
+├── persistence.py
+└── reporting.py
 ```
 
-Responsibilities remain separated:
+The stable analysis package separates calculations from orchestration, plotting, persistence, and terminal reporting:
+
+```text
+src/upscaling_app/analysis/distributions/
+├── __init__.py
+├── analysis.py
+├── metrics.py
+├── pipeline.py
+├── persistence.py
+├── plotting.py
+└── reporting.py
+```
+
+Responsibilities:
 
 ```text
 upscaling/distributions
     analytical distribution formulation
-    parameter estimation
+    direct CDF parameter estimation
     parameter persistence
+    fit-workflow reporting
 
 analysis/distributions
-    measured-distribution analysis
-    consistency diagnostics
-    statistical evaluation
+    empirical distribution diagnostics
+    fit-quality metrics
+    D50 consistency analysis
+    result persistence
     plotting and reporting
 ```
 
 ---
 
-## 4.10 CLI
+## 4.13 Stable Execution
 
-Stable workflows should be exposed through:
+The stable CLI surface is:
 
 ```bash
 upscaling distributions fit
@@ -385,9 +419,13 @@ upscaling analyze distributions
 ```text
 load normalized distributions
         ↓
-fit Rosin–Rammler parameters
+construct empirical CDFs
         ↓
-persist parameters
+fit Rosin–Rammler at original diameters
+        ↓
+persist shape and scale
+        ↓
+report execution summary
 ```
 
 `upscaling analyze distributions`:
@@ -395,9 +433,13 @@ persist parameters
 ```text
 load normalized distributions
         ↓
-calculate experimental descriptors
+load persisted shape and scale
         ↓
-validate D50 consistency
+evaluate fitted CDFs
+        ↓
+reconstruct distribution D50
+        ↓
+compare fitted and experimental medians
         ↓
 generate reports and figures
 ```
@@ -406,50 +448,54 @@ The CLI remains a dispatcher and contains no scientific calculations.
 
 ---
 
-## 4.11 Scope Boundary
+## 4.14 Scope Boundary
 
-The following topics are intentionally not part of the stable Milestone 4 production workflow:
+The following topics are not part of the stable Milestone-4 workflow:
 
 ```text
+upper-edge CDF fitting
+moment-based production fitting
 legacy continuous-height reconstruction
-alternative continuous representations
-distribution-family benchmarking
+alternative analytical distribution families
 number-based transformations
 shape-parameter correlations
 oil-property correlations
 scale-transfer correlations
 gas-transfer correlations
 field-scale k prediction
+mixture-distribution modelling
 ```
 
-These remain research topics and are documented separately in:
+Resolved representation studies are retained as research history; open research questions remain documented separately in:
 
 ```text
 DISTRIBUTIONS_RESEARCH_GOALS_UPDATED.md
 ```
 
-They must not replace the stable reference implementation until their scientific role and validation criteria are established.
+They must not silently replace the stable reference implementation.
 
 ---
 
 ## Milestone Result
 
-The project now provides a reproducible experimental distribution analysis and Rosin–Rammler fitting workflow based exclusively on the normalized databases.
-
-The stable foundation consists of:
+Milestone 4 is closed with the following stable foundation:
 
 ```text
-experimental distribution descriptors
+normalized experimental distributions
 +
-D50 consistency analysis
+original-diameter empirical CDF convention
 +
-direct Rosin–Rammler CDF fitting
+direct Rosin–Rammler fitting
 +
-discrete-moment reference fitting
+shape / scale persistence
 +
-persisted experiment-level parameters
+CDF fit-quality evaluation
 +
-fit-quality evaluation
+distribution-reconstructed D50 reference
++
+reported-D50 source diagnostic
++
+representative CDF / PDF visualization
 ```
 
-Future distribution-correlation and upscaling research will build on this foundation without modifying the established normalized data or reference fitting workflow.
+Future distribution-correlation and scale-up research should build on this foundation without reopening the settled representation convention unless new traceable evidence requires it.

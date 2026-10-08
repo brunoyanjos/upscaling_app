@@ -47,6 +47,13 @@ Database reconstruction:
 upscaling database build
 ```
 
+Stable distribution workflows:
+
+```bash
+upscaling distributions fit
+upscaling analyze distributions
+```
+
 ## Database Rules
 
 Raw spreadsheets must be parsed only in the database layer.
@@ -86,9 +93,9 @@ Use SI units internally whenever applicable.
 ```text
 density              kg/m³
 dynamic viscosity    Pa·s
-diameter              m
+diameter             m
 volumetric flow       m³/s
-interfacial tension   N/m
+interfacial tension  N/m
 fractions             dimensionless
 ```
 
@@ -101,15 +108,50 @@ Keep these responsibilities separate:
 ```text
 data ingestion
 physical equations
-optimization
+optimization / fitting
 prediction
 statistical analysis
 result persistence
+reporting
+plotting
 ```
 
 Do not modify a physical equation or correlation merely to improve numerical agreement.
 
-Any change to the physical formulation must be explicit and justified.
+Any change to a physical formulation or stable scientific convention must be explicit and justified.
+
+## Distribution Workflow
+
+The stable Rosin–Rammler reference is the direct CDF fit evaluated at the original experimental `droplet_diameter` coordinates.
+
+Stable fitting contract:
+
+```text
+droplet_diameter + volume_fraction
+        ↓
+empirical CDF
+        ↓
+direct Rosin–Rammler fit
+        ↓
+experiment_id + shape + scale
+```
+
+Do not silently reintroduce:
+
+```text
+upper-edge coordinates for CDF fitting
+moment-based fitting in the production workflow
+alternative continuous reconstructions
+```
+
+Those belong to research diagnostics unless a new validated decision explicitly replaces the current baseline.
+
+For fit analysis:
+
+- compare the fitted CDF against the empirical CDF at original diameters;
+- use distribution-reconstructed `D50` as the primary fitted-D50 reference;
+- retain reported `measured_d50` as a secondary source-consistency diagnostic;
+- do not overwrite the normalized experiment database to force agreement between the two D50 sources.
 
 ## JAX
 
@@ -129,13 +171,14 @@ Do not duplicate experimental selections across pipelines when the same configur
 
 Distinguish clearly between:
 
-- calibration error;
+- calibration / fit error;
 - predictive validation;
 - outlier sensitivity;
 - numerical error;
-- experimental variability.
+- experimental variability;
+- source-consistency diagnostics.
 
-Do not interpret improved fit after removing outliers as independent predictive improvement unless validation supports that conclusion.
+Do not interpret improved fit after removing observations as independent predictive improvement unless validation supports that conclusion.
 
 ## Code Style
 
@@ -149,10 +192,18 @@ Prefer:
 
 Avoid redundant comments that restate the code.
 
-## Current Milestone
+## Current Project Stage
 
-Milestone 1 is the data architecture and CLI foundation.
+Completed and stabilized blocks:
 
-The next milestone is reconstruction of the SSDI pipeline using the normalized databases.
+```text
+Milestone 1 — Data Architecture and CLI Foundation
+Milestone 2 — SSDI Pipeline Reconstruction
+Milestone 3 — SSMD Pipeline Reconstruction
+Milestone 4 — Droplet-Size Distribution Analysis
+Milestone 5 — Experimental Analysis architecture
+```
 
-The SSDI work should preserve the validated physical formulation while removing hard-coded dataset selection and separating data, physics, optimization, prediction, metrics, and analysis.
+Before structural changes, consult the corresponding milestone and research documents.
+
+The next distribution research questions concern normalized shape behaviour and possible prediction of the Rosin–Rammler shape parameter `k`. These remain exploratory and must stay separate from the stable distribution fitting workflow.

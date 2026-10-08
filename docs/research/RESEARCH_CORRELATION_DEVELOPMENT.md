@@ -2,85 +2,93 @@
 
 ## Status
 
-**Deferred research pipeline — not part of the current SSDI reconstruction milestone.**
+**Deferred research pipeline — core SSDI, SSMD, and droplet-distribution reconstruction prerequisites are now complete.**
 
-This document records the scientific rationale, hypotheses, candidate data sources, and validation strategy for a future correlation-development pipeline. Implementation should begin only after the main modelling workflows are reconstructed and stabilized, including SSDI, SSMD, and droplet-distribution analysis.
+This document records the scientific rationale, hypotheses, candidate data sources, and validation strategy for future correlation development.
 
-The purpose of this document is to preserve the research direction without expanding the scope of the current reconstruction work.
+The production SSDI, SSMD, and distribution workflows should remain stable while this research is developed separately.
 
 ---
 
 ## 1. Motivation
 
-The reconstructed SSDI pipeline reproduces the existing correlation and allows its statistical behavior to be evaluated systematically.
+The reconstructed SSDI pipeline shows meaningful predictive capability but retains systematic oil-dependent residual structure under leave-one-oil-out validation.
 
-The leave-one-oil-out analysis showed that the SSDI correlation has moderate global generalization performance, but the prediction error is strongly heterogeneous across oils. Some oils exhibit systematic overprediction or underprediction when they are excluded from calibration.
+The reconstructed SSMD workflow also retains oil dependence and no universal full-scale closure has been validated.
 
-This suggests that the existing hydrodynamic correlation may not capture all oil-dependent effects.
+The droplet-distribution workflow is now stable and provides fitted Rosin–Rammler `shape` and `scale` parameters for each experimental distribution.
 
-The next scientific question is therefore not only:
+The broader research question is therefore:
 
-> How well does the current SSDI correlation fit the available experiments?
+> Which physicochemical properties of the oil explain systematic model behaviour that remains after the hydrodynamic effects already represented by the production models are accounted for?
 
-but also:
+A related distribution question is:
 
-> Which physicochemical properties of the oil explain the systematic prediction errors that remain after the hydrodynamic effects already represented by the model are accounted for?
+> Do oil properties explain reproducible variation in distribution shape after characteristic droplet-size scale is removed?
 
 ---
 
 ## 2. Scope Boundary
 
-This work must remain separate from the reconstruction of the existing production pipelines.
+This research must remain separate from production reconstruction.
 
-The current modelling milestones should continue to focus on:
+Stable production blocks now include:
 
-- reproducing the existing SSDI workflow;
-- reconstructing the SSMD workflow;
-- reconstructing droplet-distribution analysis;
-- preserving deterministic databases and model outputs;
-- separating ingestion, physics, calibration, prediction, and statistical analysis.
+```text
+SSDI reconstruction and validation
+SSMD reconstruction and validation
+direct-CDF Rosin–Rammler distribution fitting
+experimental analysis architecture
+```
 
-The correlation-development study described here is a **future research pipeline**.
-
-It must not modify the validated SSDI equations simply to improve fit.
+The research pipeline must not modify validated production equations or stable distribution representation solely to reduce in-sample error.
 
 ---
 
 ## 3. Current Evidence
 
-The SSDI leave-one-oil-out analysis provides the first evidence that oil-specific behavior may be relevant.
+### SSDI
 
-In leave-one-oil-out validation:
+Leave-one-oil-out validation shows moderate global transferability but important oil-specific residual structure.
 
-1. one oil is excluded completely from calibration;
-2. the SSDI coefficients are calibrated using the remaining oils;
-3. the excluded oil is predicted without having contributed to the calibration;
-4. the process is repeated for every oil.
-
-This produces out-of-oil predictions for the complete experimental dataset.
-
-The pooled leave-one-oil-out metrics showed a moderate degradation relative to the in-sample baseline, indicating that the model retains part of its predictive capability for unseen oils but does not generalize uniformly across all oils.
-
-More importantly, the oil-level results showed strong systematic differences in residual behavior.
-
-The relevant diagnostic quantity is the logarithmic residual:
+The useful diagnostic quantity remains:
 
 \[
 r_{\log}
 =
 \log\left(
-\frac{d_{50,\mathrm{exp}}}
-     {d_{50,\mathrm{pred}}}
+\frac{d_{50,exp}}
+{d_{50,pred}}
 \right).
 \]
 
 Interpretation:
 
-- \(r_{\log} > 0\): the model underpredicts \(d_{50}\);
-- \(r_{\log} < 0\): the model overpredicts \(d_{50}\);
-- \(r_{\log} \approx 0\): little systematic multiplicative bias.
+```text
+r_log > 0    model underpredicts d50
+r_log < 0    model overpredicts d50
+r_log ≈ 0    little systematic multiplicative bias
+```
 
-The future research pipeline should use the **out-of-oil residuals**, rather than only the in-sample residuals, as the primary diagnostic target.
+Out-of-oil residuals are more informative for transferable oil-property research than purely in-sample residuals.
+
+### SSMD
+
+The current SSMD campaign indicates systematic oil and gas dependence, but the experimental design cannot independently identify all candidate water-jet control variables.
+
+### Droplet distributions
+
+The stable direct CDF fit now provides one Rosin–Rammler parameter pair per experiment:
+
+```text
+experiment_id
+shape
+scale
+```
+
+Distribution-reconstructed D50 is the primary median reference for fit analysis, while reported `measured_d50` remains a secondary source-consistency diagnostic.
+
+This makes distribution shape available as a separate research target rather than conflating all droplet-size information into D50 alone.
 
 ---
 
@@ -90,54 +98,55 @@ A useful working hypothesis is to separate two sources of variation.
 
 ### 4.1 Within-oil variation
 
-Variation among experiments performed with the same oil may be driven primarily by hydrodynamic and operating conditions, such as:
+Variation among experiments performed with the same oil may be driven primarily by hydrodynamic and operating conditions:
 
-- Weber number;
-- Capillary number;
-- Reynolds number;
-- Froude number;
-- nozzle diameter;
-- liquid flow rate;
-- gas flow rate;
-- dispersion method;
-- other operating parameters.
+```text
+Weber number
+Capillary number
+Reynolds number
+Froude number
+nozzle diameter
+liquid flow rate
+gas flow rate
+dispersion method
+SSMD treatment intensity
+```
 
 Conceptually:
 
 \[
-\text{within-oil behavior}
+\text{within-oil behaviour}
 \longleftrightarrow
 \text{hydrodynamics and operating conditions}.
 \]
 
 ### 4.2 Between-oil variation
 
-Systematic displacement of the response between different oils may depend on physicochemical properties of the oil.
+Systematic displacement between oils may depend on physicochemical properties:
 
-Candidate properties include:
-
-- density;
-- API gravity;
-- viscosity;
-- interfacial tension;
-- asphaltene content;
-- wax content;
-- TAN;
-- sulfur content;
-- nitrogen content;
-- carbon residue;
-- selected compositional descriptors;
-- selected crude-assay descriptors.
+```text
+density
+API gravity
+viscosity
+interfacial tension
+asphaltenes
+wax
+TAN
+sulfur
+nitrogen
+carbon residue
+selected compositional descriptors
+```
 
 Conceptually:
 
 \[
-\text{between-oil behavior}
+\text{between-oil behaviour}
 \longleftrightarrow
 \text{oil physicochemical properties}.
 \]
 
-A future correlation may therefore need to combine these two levels rather than treating all experiments as fully independent observations.
+A future model may need to combine experiment-level hydrodynamics with oil-level physicochemical structure.
 
 ---
 
@@ -145,52 +154,31 @@ A future correlation may therefore need to combine these two levels rather than 
 
 Individual crude-assay spreadsheets are available for the oils.
 
-These tables may contain information at different levels:
+Whole-crude properties are the highest-priority descriptors because the dispersion experiments use the complete oil.
 
-### Whole-crude properties
+Candidate groups include:
 
-These are the highest-priority properties for the first analysis because the dispersion experiments use the complete oil.
+```text
+whole-crude density / API
+viscosity at defined temperatures
+asphaltenes
+wax
+sulfur
+nitrogen
+TAN
+carbon residue
+selected distillation descriptors
+```
 
-Examples include:
-
-- density;
-- API gravity;
-- viscosity at defined temperatures;
-- asphaltenes;
-- wax;
-- sulfur;
-- nitrogen;
-- TAN;
-- carbon residue;
-- metals;
-- other bulk crude descriptors.
-
-### Distillation and yield information
-
-Distillation curves should not be inserted directly as dozens or hundreds of independent predictors.
-
-If they become relevant, they should first be converted into physically interpretable descriptors, for example:
-
-- \(T_{10}\);
-- \(T_{50}\);
-- \(T_{90}\);
-- light-fraction yield;
-- heavy-fraction yield;
-- selected boiling-range fractions.
-
-### Cut-specific properties
-
-Properties associated with individual atmospheric or vacuum cuts should not initially be treated as equivalent to whole-crude properties.
-
-They may become useful later if a physically meaningful aggregate descriptor is defined.
+Distillation curves should not initially be inserted as large sets of independent predictors. If used, they should first be reduced to physically interpretable descriptors such as `T10`, `T50`, `T90`, and selected yield fractions.
 
 ---
 
 ## 6. Data Architecture
 
-Raw crude-assay spreadsheets must not be read directly by the scientific correlation-development pipeline.
+Raw crude-assay spreadsheets must not be read directly by scientific correlation-development pipelines.
 
-They should follow the same architectural principle already established for the rest of the project:
+They should follow the established project architecture:
 
 ```text
 raw crude-assay spreadsheets
@@ -212,7 +200,6 @@ density
 api
 viscosity_20
 viscosity_40
-interfacial_tension
 asphaltenes
 wax
 tan
@@ -222,17 +209,7 @@ carbon_residue
 ...
 ```
 
-The existing relationship remains:
-
-```text
-oil_properties / oil_characterization
-              1
-              │
-              N
-         experiments
-```
-
-The exact schema should be defined only after the available crude-assay spreadsheets have been inventoried.
+The exact schema should be defined only after the available source files are inventoried.
 
 ---
 
@@ -240,20 +217,22 @@ The exact schema should be defined only after the available crude-assay spreadsh
 
 A critical distinction must be maintained between the number of experiments and the number of independent oils.
 
-If multiple experiments share the same oil-specific property, those repeated experiments do not create additional independent observations of that oil property.
-
-For example, if one oil has a fixed asphaltene concentration across 18 experiments, this represents:
-
-- 18 experimental responses;
-- but only 1 independent oil-level observation of asphaltene concentration.
+Repeated experiments sharing one oil-specific property do not create independent observations of that property.
 
 Therefore:
 
-- hydrodynamic effects can use the full experiment-level dataset;
-- oil-property effects must account for clustering by `oil_id`;
-- experiment-level random train/test splitting should not be used to evaluate generalization to new oils.
+```text
+hydrodynamic effects
+    may use experiment-level observations
 
-This avoids pseudoreplication and overly optimistic statistical conclusions.
+oil-property effects
+    must account for clustering by oil_id
+
+new-oil generalization
+    must not use random experiment-level splitting
+```
+
+This avoids pseudoreplication and overly optimistic conclusions.
 
 ---
 
@@ -261,75 +240,58 @@ This avoids pseudoreplication and overly optimistic statistical conclusions.
 
 The first implementation should be diagnostic, not immediately predictive.
 
-A future analysis dataset may contain:
+A future joined dataset may contain:
 
 ```text
 experiment_id
 oil_id
 
-d50
-d50_D
+measured responses
+model predictions
+out-of-oil residuals
 
-weber
-capillary
-reynolds
-froude
-nozzle_diameter
-oil_flow
-gas_flow
-...
+hydrodynamic quantities
 
-baseline_prediction
-loo_prediction
-loo_log_residual
+oil properties
 
-density
-viscosity
-api
-interfacial_tension
-asphaltenes
-wax
-tan
-...
+distribution shape
 ```
 
-The first analyses should include:
+Candidate first analyses include:
 
-1. distributions of relevant physical and chemical variables;
-2. coverage of the experimental property space;
-3. correlation structure among candidate variables;
-4. scatter plots of \(d_{50}/D\) versus relevant hydrodynamic variables;
-5. scatter plots of out-of-oil log residual versus oil properties;
-6. oil-level summaries of residual mean, residual variance, Log-MSE, RMSE, and MAPE;
-7. identification of variables associated with systematic model bias.
+1. coverage of the physical and chemical property space;
+2. correlation structure among candidate variables;
+3. SSDI out-of-oil residual versus oil properties;
+4. SSMD response diagnostics versus oil properties;
+5. fitted distribution `shape` versus hydrodynamics and treatment;
+6. oil-level summaries of shape and prediction residuals;
+7. identification of variables associated with systematic between-oil shifts.
 
-The goal is to identify missing physical structure before proposing a new equation.
+The goal is to identify missing physical structure before proposing new equations.
 
 ---
 
 ## 9. Dimensionless-Group Dependence
 
-Dimensionless groups must not be treated as statistically independent predictors without checking their definitions.
+Dimensionless groups must not be treated as independent predictors without checking their definitions.
 
-For example, under the classical definitions:
-
-\[
-We = \frac{\rho U^2 D}{\sigma},
-\qquad
-Re = \frac{\rho U D}{\mu},
-\qquad
-Ca = \frac{\mu U}{\sigma},
-\]
-
-which implies:
+For example:
 
 \[
-We = Re\,Ca.
+We=\frac{\rho U^2D}{\sigma},
+\qquad
+Re=\frac{\rho UD}{\mu},
+\qquad
+Ca=\frac{\mu U}{\sigma},
 \]
 
-Therefore, blindly including \(We\), \(Re\), and \(Ca\) in the same regression can introduce exact or near-exact multicollinearity.
+which implies under the classical definitions:
 
-Variable selection must be guided by both physics and statistics.
+\[
+We=Re\,Ca.
+\]
+
+Variable selection must therefore be guided by both physics and statistical identifiability.
 
 ---
 
@@ -337,86 +299,37 @@ Variable selection must be guided by both physics and statistics.
 
 The first candidate models should remain parsimonious.
 
-### Strategy A — Extend the existing SSDI structure
+### Strategy A — Extend an existing physical structure
 
-Preserve the current hydrodynamic correlation and allow one coefficient to depend on oil properties.
+Allow a limited production coefficient or correction factor to depend on one physically motivated oil property.
 
-For example:
+### Strategy B — Multiplicative oil-property correction
 
-\[
-A = A(X_{\mathrm{oil}})
-\]
-
-or:
+Use a form such as:
 
 \[
-B = B(X_{\mathrm{oil}}).
+Y=f(\text{hydrodynamics})\,g(X_{oil}).
 \]
 
-A positive coefficient may be parameterized using a form such as:
+### Strategy C — Shape correlation
+
+For distributions, treat Rosin–Rammler `shape` as the target:
 
 \[
-A(X)
-=
-A_0\exp(\gamma X).
+k=f(\text{hydrodynamics},X_{oil},\text{treatment},\text{gas},\text{geometry}).
 \]
 
-This approach preserves more of the original physical structure.
+This should be attempted only after normalized-shape diagnostics show that a nontrivial predictive shape model is scientifically justified.
 
-### Strategy B — Multiplicative correction factor
+### Strategy D — Generalized power-law diagnostic
 
-Introduce a physically motivated oil-property correction:
-
-\[
-\frac{d_{50}}{D}
-=
-f(We,Ca)
-\,g(X_{\mathrm{oil}}).
-\]
-
-This may be useful if the residual analysis shows a systematic between-oil multiplicative shift.
-
-### Strategy C — Generalized power-law model
-
-A diagnostic alternative is:
-
-\[
-\frac{d_{50}}{D}
-=
-C
-We^a
-Ca^b
-X_1^c
-X_2^d.
-\]
-
-In logarithmic form:
-
-\[
-\log\left(\frac{d_{50}}{D}\right)
-=
-\log C
-+
-a\log We
-+
-b\log Ca
-+
-c\log X_1
-+
-d\log X_2.
-\]
-
-This is convenient for statistical exploration, but it should not automatically replace a physically motivated model.
+Log-linear power laws may be useful for screening but should not automatically replace physically motivated models.
 
 ---
 
 ## 11. Model Complexity
 
-The number of candidate oil properties may be large, but the number of independent oils is comparatively small.
-
-Therefore, the first models must use only a small number of additional oil-level predictors.
-
-Complex models with many chemical descriptors may produce excellent in-sample fits while having poor generalization.
+The number of candidate oil properties may be large, but only ten independent oils are currently available.
 
 The preferred sequence is:
 
@@ -430,93 +343,61 @@ parsimonious model
 grouped validation
 ```
 
-not:
-
-```text
-all available variables
-        ↓
-automated regression
-        ↓
-best in-sample score
-```
+not automated selection of a large predictor set based on in-sample score.
 
 ---
 
 ## 12. Validation Strategy
 
-All future models intended to generalize to new oils should be evaluated using grouped validation by `oil_id`.
+Any future model intended to generalize to new oils should use grouped validation by `oil_id`.
 
-The baseline validation strategy is leave-one-oil-out:
+Baseline strategy:
 
 ```text
 for each oil:
     hold out oil
-    calibrate using remaining oils
+    fit using remaining oils
     predict held-out oil
 ```
 
-Experiment-level random splitting is inappropriate for this objective because measurements from the same oil could appear in both training and test sets.
+If model structure, variables, interactions, or hyperparameters are selected using the same oils, the final study should use nested grouped validation.
 
-### Nested validation
-
-If the future study uses the available oils to select:
-
-- variables;
-- model form;
-- interaction terms;
-- hyperparameters;
-
-then a simple leave-one-oil-out score may become optimistic because the validation results themselves influenced model development.
-
-A stronger final procedure should use nested grouped validation:
-
-```text
-outer loop:
-    hold out one oil completely
-
-    inner loop:
-        use remaining oils to select
-        model structure and parameters
-
-    outer test:
-        evaluate on untouched held-out oil
-```
-
-This should be considered the preferred validation strategy for the final correlation-development study.
+Experiment-level random train/test splitting is inappropriate for the new-oil objective.
 
 ---
 
-## 13. Potential Role of SSMD and Distribution Data
+## 13. Role of Distribution Data
 
-Implementation should wait until the broader modelling pipeline is reconstructed.
+The distribution pipeline is no longer a missing prerequisite.
 
-SSMD and droplet-distribution data may contribute information that is not visible when only \(d_{50}\) is considered.
+It now contributes experiment-level shape information that may reveal effects not visible in D50 alone.
 
-Possible future questions include:
+Future questions include:
 
-- whether oil properties affect SSDI and SSMD differently;
-- whether oil properties influence distribution width or shape in addition to median diameter;
-- whether systematic SSDI residuals correspond to changes in the entire droplet-size distribution;
-- whether a common oil-property correction can explain multiple dispersion regimes.
+```text
+Does treatment alter shape after D50 normalization?
+Does gas alter shape systematically?
+Are shape differences oil dependent?
+Do SSDI residuals correspond to distribution-shape changes?
+Can one oil-property descriptor explain both median and shape behaviour?
+```
 
-This is one reason the correlation-development pipeline should remain deferred until the core SSDI, SSMD, and distribution workflows are stable.
+Distribution-level predictive validation should use the complete measured CDF rather than only fitted D50.
 
 ---
 
 ## 14. Proposed Future Pipeline
-
-The future research pipeline should follow approximately:
 
 ```text
 crude-assay ingestion
         ↓
 normalized oil characterization
         ↓
-merge with normalized experiments
+merge with normalized experiments and fitted distribution parameters
         ↓
 existing-model out-of-oil predictions
         ↓
-residual-property exploratory analysis
+residual / shape exploratory analysis
         ↓
 candidate physical hypotheses
         ↓
@@ -529,33 +410,37 @@ model comparison
 final scientific interpretation
 ```
 
-This pipeline should remain separate from the SSDI reconstruction workflow.
+This pipeline remains separate from production reconstruction.
 
 ---
 
 ## 15. Activation Criteria
 
-Implementation of this research pipeline should begin only after:
+The following prerequisites are now satisfied:
 
-- SSDI reconstruction is complete and frozen;
-- SSMD reconstruction is complete;
-- droplet-distribution analysis is reconstructed;
-- crude-assay files for the available oils have been inventoried;
-- oil identifiers can be mapped deterministically between assay data and experiments;
-- the set of oil properties to normalize has been defined.
+```text
+[x] SSDI reconstruction complete and stabilized
+[x] SSMD reconstruction complete
+[x] droplet-distribution fitting and analysis stabilized
+```
 
-At that point, this document should be reviewed and converted into a dedicated milestone or research plan.
+The main remaining prerequisites are:
+
+```text
+[ ] inventory crude-assay files
+[ ] define deterministic oil-ID mapping for assay data
+[ ] define normalized oil-characterization schema
+[ ] select the first small set of oil properties to analyse
+```
 
 ---
 
 ## 16. Immediate Next Step
 
-No implementation is required now.
+No production-model change is required.
 
-The current priority remains completing the main application pipeline.
-
-When the core modelling workflows are complete, the first task for this research line should be:
+When this research line is activated, the first task should be:
 
 > Build and validate a normalized oil-characterization database from the available crude-assay spreadsheets.
 
-Only after that database exists should residual-property analysis or new-correlation fitting begin.
+In parallel, distribution-specific research may begin with shape collapse and descriptive analysis of fitted `k`, because the stable distribution parameter database now exists.

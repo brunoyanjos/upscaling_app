@@ -1066,30 +1066,17 @@ These belong to future research rather than to reconstruction of the existing SS
 
 ---
 
-## Next Scientific Step
+## Subsequent Milestone
 
-With Milestone 3 closed, the next production-development block is the droplet-size distribution workflow.
+Milestone 3 is closed.
 
-That work should continue from the normalized:
-
-```text
-data/database/distributions.xlsx
-```
-
-and preserve the same architecture:
+The droplet-size distribution workflow that followed this milestone has now been reconstructed and stabilized as:
 
 ```text
-normalized data
-        ↓
-distribution representation
-        ↓
-model / parameter estimation
-        ↓
-prediction
-        ↓
-persistence
-        ↓
-statistical evaluation
+Milestone 4 — Droplet-Size Distribution Analysis
+Status: Completed
 ```
 
-Before introducing structural changes, consult the existing distribution-related source files and the current distribution milestone documentation.
+The stable distribution implementation consumes `data/database/distributions.xlsx`, fits the Rosin–Rammler CDF at the original measured droplet diameters, persists `shape` and `scale`, and evaluates fit quality separately in `analysis/distributions/`.
+
+Future SSMD correlation research remains separated from both the production SSMD workflow and the stable distribution workflow.

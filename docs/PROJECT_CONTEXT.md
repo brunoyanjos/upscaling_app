@@ -24,13 +24,18 @@ Milestone 2 — SSDI Pipeline Reconstruction
 Status: Completed
 
 Milestone 3 — SSMD Pipeline Reconstruction
-Status: In progress — finalization stage
+Status: Completed
 
-Next scientific workflow
-Droplet-size distributions
+Milestone 4 — Droplet-Size Distribution Analysis
+Status: Completed
+
+Milestone 5 — Experimental Analysis
+Status: Closed for the current project stage
 ```
 
-For the current presentation, the SSDI and SSMD scientific result blocks are considered closed. Both now include global-versus-oil-wise presentation diagnostics. The immediate engineering task is project finalization: CLI integration, persistence/version review, cleanup, and reproducibility checks. The next scientific workflow remains droplet-size distributions.
+The core reconstruction phase is now substantially stabilized. Distribution representation and fitting were explicitly reviewed before closure, including the coordinate convention used for the empirical CDF.
+
+The next scientific work is research-oriented rather than reconstruction-oriented. For droplet distributions, the next open questions concern normalized shape behaviour and possible prediction of the Rosin–Rammler shape parameter `k`.
 
 ## Current architecture
 
@@ -49,7 +54,8 @@ upscaling_app/
 │       ├── analysis/
 │       │   ├── experimental/
 │       │   ├── ssdi/
-│       │   └── ssmd/
+│       │   ├── ssmd/
+│       │   └── distributions/
 │       ├── database/
 │       │   ├── build.py
 │       │   └── utils/
@@ -104,7 +110,7 @@ data/database/
 
 ### Oil properties
 
-`oil_properties.xlsx` stores properties associated with the oil itself, including identifiers, density, pour point, wax/asphaltene content, and reference viscosities.
+`oil_properties.xlsx` stores oil-level properties including identifiers, density, pour point, wax/asphaltene content, and reference viscosities.
 
 ### Experiments
 
@@ -144,7 +150,7 @@ droplet_diameter
 volume_fraction
 ```
 
-Each experiment therefore has multiple distribution rows linked by deterministic `experiment_id`.
+Each experiment has multiple distribution rows linked by deterministic `experiment_id`.
 
 ## Identifiers
 
@@ -152,30 +158,7 @@ Each experiment therefore has multiple distribution rows linked by deterministic
 
 The same experiment must receive the same identifier every time the database is rebuilt.
 
-The current database architecture uses UUID5-based deterministic identifiers shared between experiment and distribution builders.
-
-## Dispersion types
-
-The current high-level classification is:
-
-```text
-Untreated
-SSDI
-SSMD
-```
-
-Normalized tags include forms such as:
-
-```text
-3014-Untreated
-SSDI-C9500
-SSDI-IBC
-WJ-40%
-WJ-45%
-WJ-50%
-```
-
-Raw source naming is normalized during database construction rather than interpreted inside modelling pipelines.
+The database architecture uses UUID5-based deterministic identifiers shared between experiment and distribution builders.
 
 ## Units
 
@@ -197,8 +180,8 @@ Temperature quantities such as pour point may remain in °C when that is the nat
 1. Raw spreadsheets are parsed only in the database layer.
 2. Modelling pipelines consume normalized databases.
 3. Physical equations remain separate from data ingestion.
-4. Calibration / optimization remain separate from statistical analysis.
-5. Prediction outputs are persisted before downstream model evaluation whenever practical.
+4. Calibration / fitting remain separate from statistical analysis.
+5. Prediction or fitted-model outputs are persisted before downstream evaluation whenever practical.
 6. Experimental identifiers remain stable across database rebuilds.
 7. SI units are used internally whenever applicable.
 8. Reusable logic belongs inside `src/upscaling_app/`.
@@ -226,180 +209,166 @@ persistence
         ↓
 statistical analysis
         ↓
+sensitivity analysis
+        ↓
 predictive validation
 ```
 
-The current presentation includes hydrodynamic screening, physical scaling, coefficient calibration, parity analysis, residual diagnostics, in-sample sensitivity analyses, leave-one-oil-out validation, oil-wise calibration, and a 2 mm gas / no-gas performance comparison.
-
-Current presentation-level SSDI reference metrics:
-
-```text
-reference    Log-MSE 0.435997    R² 0.643330    RMSE 0.4910 mm    MAPE 64.43 %
-global       Log-MSE 0.426986    R² 0.685533    RMSE 0.4610 mm    MAPE 57.96 %
-oil-wise     Log-MSE 0.128635    R² 0.828497    RMSE 0.3405 mm    MAPE 30.11 %
-```
-
-The oil-wise SSDI result is an in-sample diagnostic, not a replacement for leave-one-oil-out validation.
+The complete-population leave-one-oil-out workflow remains the principal cross-oil validation within the current campaign. Oil-wise calibrations and reduced-population studies remain diagnostic and must not be confused with external validation.
 
 ## SSMD status
 
-Milestone 3 is in finalization.
+Milestone 3 is completed.
 
-### Dataset
+The reconstructed SSMD reference preserves SINTEF Equation 5 and Equation 6, explicit model identities, persisted predictions, global and oil-wise diagnostics, and leave-one-oil-out validation of the global `c,d` calibration.
+
+The global `c,d` formulation improves in-sample representation while `eta` remains condition dependent. No universal full-scale SSMD closure has been validated.
+
+Exploratory full-scale correlation work remains separated in `RESEARCH_SSMD_UPSCALING_UPDATED.md`.
+
+## Distribution status
+
+Milestone 4 is completed.
+
+### Stable data
 
 ```text
-90 SSMD experiments
+180 experimental distributions
+52 diameter bins per distribution
 10 oils
-
-30 — 3 mm, no gas
-30 — 2 mm, no gas
-30 — 2 mm, gas
 ```
 
-### Derived physics
-
-The SSMD preprocessing includes untreated-release hydrodynamics and water-jet quantities such as:
+The normalized distribution representation is:
 
 ```text
-water_velocity
-water_momentum_flux
-water_kinetic_power
-oil / gas momentum
-momentum_amplification
+experiment_id
+droplet_diameter
+volume_fraction
 ```
 
-The primary treatment variable is:
+### Stable analytical model
+
+The reference analytical distribution is the two-parameter Rosin–Rammler / Weibull CDF:
+
+\[
+F(d)=1-\exp[-(d/\lambda)^k].
+\]
+
+The production estimator is the direct CDF fit using the original measured `droplet_diameter` coordinates:
+
+\[
+\min_{k,\lambda}
+\sum_i
+\left[F_{RR}(d_i;k,\lambda)-F_i\right]^2.
+\]
+
+The stable fitting workflow does not shift the empirical CDF to geometric upper bin edges.
+
+### Persisted distribution parameters
 
 ```text
-A_M = (M_o + M_w) / M_o
+experiment_id
+shape
+scale
 ```
 
-The measured relative response is:
+The previous moment-based estimator was evaluated as a methodological alternative and removed from the stable production workflow after comparative analysis showed inferior behaviour for the selected objectives.
+
+### Distribution analysis
+
+Primary fit-quality diagnostics include:
 
 ```text
-dR_measured = measured_d50 / untreated_d50_measured
+CDF RMSE
+CDF maximum absolute error
+fitted D50
+reconstructed distribution D50
+D50 agreement metrics
+representative CDF / PDF figures
 ```
 
-### Production reference
+The fitted median is:
 
-SINTEF Equation 5:
+\[
+D_{50,fit}=\lambda(\ln2)^{1/k}.
+\]
+
+The primary D50 fit reference is the median reconstructed directly from the measured distribution. Reported `measured_d50` remains a secondary diagnostic because a small subset of experiments shows substantial disagreement between the reported value and the stored distribution.
+
+Current numerical fingerprints for fitted D50 versus distribution-reconstructed D50 are approximately:
 
 ```text
-dR = (eta A_M)^(-3/5)
-Log-MSE = 0.716712
+RMSE       = 0.025932 mm
+MAE        = 0.016420 mm
+MAPE       = 4.590485 %
+R²         = 0.998529
+Log-MSE    = 0.003792
+R²_log     = 0.995474
 ```
 
-SINTEF Equation 6:
+The mean CDF RMSE across the 180 fitted distributions is approximately:
 
 ```text
-dR = (eta A_M)^(-3/5) * (c + d mu/sigma)
-Log-MSE = 0.128723
+0.017585
 ```
 
-The IFT term uses the untreated reference IFT.
+The PDF representation remains useful as a shape diagnostic, especially for multimodal or secondary-peak cases, but it is not the direct fitting objective.
 
-### Current model versions
+### Distribution plotting convention
+
+Experimental distributions use treatment-semantic colours from the shared project palette. Rosin–Rammler fits use neutral gray. CDF figures show experimental points and one continuous fitted curve. PDF figures are diagnostic and show the experimental binned representation together with the fitted Rosin–Rammler density.
+
+## Experimental analysis status
+
+Milestone 5 is closed for the current project stage.
+
+The experimental layer provides:
 
 ```text
-sintef_baseline
-regressed_cd_baseline
-regressed_cd_global
-regressed_oil_wise
+dataset structure
++
+treatment effects
++
+SSDI experimental diagnostics
++
+SSMD experimental diagnostics
 ```
 
-`regressed_cd_global` fits one global pair of `c,d` coefficients over all SSMD experiments while retaining the SINTEF model structure and gas-dependent `eta` treatment.
+It consumes normalized databases and remains separate from model calibration and prediction.
 
-Current approximate global fit:
-
-```text
-c_global ≈ 0.4457
-d_global ≈ 0.0257
-Log-MSE  ≈ 0.116
-R²_log   ≈ 0.548
-```
-
-The reconstructed SINTEF Equation-6 reference gives approximately:
-
-```text
-Log-MSE ≈ 0.129
-R²_log  ≈ 0.498
-```
-
-The global `c,d` regression therefore reduces Log-MSE relative to the reconstructed SINTEF Equation-6 reference while replacing regime-specific `c,d` values with a single pair.
-
-An oil-wise diagnostic was also implemented using the identifiable local factor `k_i = c + d mu_i/sigma_i`. Independent local `c_i,d_i` pairs are not fitted because they are not separately identifiable within a fixed oil.
-
-```text
-reference    Log-MSE 0.128723    R² 0.436384    RMSE 0.056085    MAPE 33.82 %
-global       Log-MSE 0.115841    R² 0.570007    RMSE 0.048987    MAPE 30.08 %
-oil-wise     Log-MSE 0.119372    R² 0.515264    RMSE 0.052012    MAPE 31.39 %
-```
-
-Unlike SSDI, the oil-wise SSMD diagnostic does not improve the pooled global regression. This is retained as a scientific result. `eta` remains condition dependent, and no universal full-scale SSMD closure has yet been validated.
-
-### SSMD analysis
-
-Model evaluation is separated from calibration.
-
-The SSMD analysis workflow consumes persisted predictions and currently supports parity comparisons for the momentum-only Equation 5, reconstructed SINTEF Equation 6, the global `c,d` regression, and the oil-wise diagnostic. Presentation analysis also compares the three principal Equation-6 strategies overall and across `3 mm — no gas`, `2 mm — no gas`, and `2 mm — gas`.
-
-Experimental SSMD analysis remains in `analysis/experimental/` and includes descriptive regime response, monotonicity, and physical screening diagnostics.
-
-## CLI
-
-The `upscaling` command remains the project-wide execution entry point.
-
-Current analysis examples include:
+## Stable CLI surface relevant to distributions
 
 ```bash
-upscaling analyze experimental descriptive
-upscaling analyze experimental ssdi
-upscaling analyze experimental ssmd
-upscaling analyze experimental treatment-effect
-upscaling analyze ssmd
+upscaling distributions fit
+upscaling analyze distributions
 ```
 
-CLI command naming should be treated as part of the public project surface and stabilized before Milestone 3 is formally closed. The newly added SSDI and SSMD oil-wise / presentation-performance workflows currently run through direct Python calls and still require CLI integration.
+The CLI remains a dispatcher; scientific calculations stay inside the corresponding package modules.
 
-### Immediate finalization checkpoint
+## Current research directions
+
+The stable reconstruction phase should not be reopened without evidence. Open distribution research belongs to the exploratory layer and includes:
 
 ```text
-- integrate SSDI oil-wise and performance workflows into the CLI;
-- integrate SSMD oil-wise and performance workflows into the CLI;
-- review versions.py for both modelling packages;
-- review paths.py and persistence workbook schemas;
-- remove temporary diagnostics and exploratory glue code;
-- run the complete workflows from a clean state;
-- freeze the resulting numerical references in the milestone documentation.
+shape collapse after D50 normalization
+variation of Rosin–Rammler shape k
+hydrodynamic / oil-property predictors for k
+distribution-family comparison
+scale and gas transfer
+grouped validation by oil
+field-scale distribution reconstruction
 ```
 
-## Next scientific workflow — droplet-size distributions
-
-The next phase is to reconstruct the droplet-size distribution workflow using the normalized `distributions.xlsx` database.
-
-Before structural changes, inspect:
+The intended long-term distribution reconstruction is:
 
 ```text
-- the normalized distribution database;
-- existing distribution-related source files;
-- any previous analytical distribution fitting methodology;
-- current presentation requirements.
+predicted D50
++
+predicted k
+        ↓
+scale lambda
+        ↓
+complete Rosin–Rammler distribution
 ```
 
-The distribution pipeline should preserve the same separation used elsewhere:
-
-```text
-data selection
-        ↓
-distribution formulation
-        ↓
-parameter estimation
-        ↓
-prediction
-        ↓
-persistence
-        ↓
-statistical evaluation
-```
-
-No new distribution model structure should be introduced before the existing implementation and project documentation are reviewed.
+Research details are tracked in `DISTRIBUTIONS_RESEARCH_GOALS_UPDATED.md` and must remain separate from the stable fitting workflow.

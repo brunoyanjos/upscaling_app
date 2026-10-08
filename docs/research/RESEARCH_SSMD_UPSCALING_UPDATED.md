@@ -2,7 +2,7 @@
 
 ## Status
 
-**Exploratory research — separated from the reconstructed SSMD production pipeline.**
+**Exploratory research — separated from the completed and stabilized SSMD production pipeline.**
 
 This document records the scientific questions, hypotheses, diagnostic experiments, negative results, and promising directions identified while reconstructing the SSMD workflow.
 
@@ -1114,7 +1114,7 @@ No additional empirical term should be added solely to improve fit at this stage
 
 ## 26. Next Research Step
 
-Research should resume only after the production SSMD reconstruction is completed and frozen.
+The production SSMD reconstruction is now completed and documented. This exploratory research should resume only through an explicit research workflow and must remain separate from the stable production reference.
 
 Recommended sequence:
 
