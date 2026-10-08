@@ -4,6 +4,9 @@ import numpy as np
 import pandas as pd
 
 from upscaling_app import paths
+from upscaling_app.upscaling.distributions.persistence import (
+    load_distribution_parameters as load_fitted_distribution_parameters,
+)
 
 EXPERIMENT_COLUMNS = [
     "experiment_id",
@@ -33,56 +36,20 @@ def _require_columns(
     missing = [column for column in columns if column not in data.columns]
 
     if missing:
-        raise ValueError(f"{source} is missing required columns: " f"{missing}")
+        raise ValueError(f"{source} is missing required columns: {missing}")
 
 
 def load_distribution_parameters() -> pd.DataFrame:
-    parameters = pd.read_excel(
-        paths.DISTRIBUTION_PARAMETERS_PATH,
-    )
+    """Load the fitted shape parameter used by the correlation model."""
+    parameters = load_fitted_distribution_parameters()
 
-    _require_columns(
-        parameters,
-        [
-            "experiment_id",
-            "cdf_shape",
-        ],
-        source="Distribution parameters",
-    )
-
-    duplicated = parameters.duplicated(
-        subset=["experiment_id"],
-        keep=False,
-    )
-
-    if duplicated.any():
-        duplicates = parameters.loc[
-            duplicated,
-            [
-                "experiment_id",
-                "cdf_shape",
-            ],
-        ]
-
-        raise ValueError(
-            "Multiple distribution parameter rows found "
-            "for the same experiment_id:\n"
-            f"{duplicates.to_string(index=False)}"
-        )
-
-    shape = parameters["cdf_shape"].to_numpy(
-        dtype=float,
-    )
-
+    shape = parameters["shape"].to_numpy(dtype=float)
     invalid_shape = ~np.isfinite(shape) | (shape <= 0.0)
 
     if invalid_shape.any():
         invalid = parameters.loc[
             invalid_shape,
-            [
-                "experiment_id",
-                "cdf_shape",
-            ],
+            ["experiment_id", "shape"],
         ]
 
         raise ValueError(
@@ -90,26 +57,11 @@ def load_distribution_parameters() -> pd.DataFrame:
             f"{invalid.to_string(index=False)}"
         )
 
-    return (
-        parameters[
-            [
-                "experiment_id",
-                "cdf_shape",
-            ]
-        ]
-        .rename(
-            columns={
-                "cdf_shape": "shape",
-            }
-        )
-        .reset_index(drop=True)
-    )
+    return parameters[["experiment_id", "shape"]].copy().reset_index(drop=True)
 
 
 def load_correlation_experiments() -> pd.DataFrame:
-    experiments = pd.read_excel(
-        paths.EXPERIMENTS_DATABASE,
-    )
+    experiments = pd.read_excel(paths.EXPERIMENTS_DATABASE)
 
     _require_columns(
         experiments,
@@ -134,8 +86,7 @@ def load_correlation_experiments() -> pd.DataFrame:
         ]
 
         raise ValueError(
-            "Multiple experiment rows found for the same "
-            "experiment_id:\n"
+            "Multiple experiment rows found for the same experiment_id:\n"
             f"{duplicates.to_string(index=False)}"
         )
 
@@ -144,7 +95,6 @@ def load_correlation_experiments() -> pd.DataFrame:
 
 def load_distribution_correlation_dataset() -> pd.DataFrame:
     parameters = load_distribution_parameters()
-
     experiments = load_correlation_experiments()
 
     dataset = parameters.merge(
@@ -159,10 +109,7 @@ def load_distribution_correlation_dataset() -> pd.DataFrame:
     if missing_experiment.any():
         missing = dataset.loc[
             missing_experiment,
-            [
-                "experiment_id",
-                "shape",
-            ],
+            ["experiment_id", "shape"],
         ]
 
         raise ValueError(

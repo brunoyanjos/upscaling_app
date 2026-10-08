@@ -66,15 +66,6 @@ def _require_columns(
 def add_release_physics(
     data: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Add release hydrodynamics shared by all experimental
-    mechanisms.
-
-    These quantities are evaluated from experiment-level
-    operating conditions and do not depend on D50 or on the
-    fitted Rosin-Rammler parameters.
-    """
-
     result = add_ssdi_physics(data)
 
     _require_columns(
@@ -87,14 +78,6 @@ def add_release_physics(
 
 
 def build_ssmd_feature_table() -> pd.DataFrame:
-    """
-    Build SSMD-specific physical features.
-
-    The individual SSMD physics functions are called explicitly
-    instead of add_derived_properties() so that dR_measured is
-    never introduced into the k-correlation feature table.
-    """
-
     dataset = load_ssmd_calibration_dataset()
 
     dataset = add_untreated_hydrodynamics(dataset)

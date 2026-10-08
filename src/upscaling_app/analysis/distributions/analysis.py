@@ -1,61 +1,20 @@
 import numpy as np
 import pandas as pd
 
-from upscaling_app.analysis.distributions.metrics import (
-    cdf_error_metrics,
-    distribution_mass_metrics,
-)
-from upscaling_app.upscaling.distributions.representation import (
-    empirical_cdf,
-    experimental_pdf,
-)
+from upscaling_app.analysis.distributions.metrics import cdf_error_metrics
+from upscaling_app.analysis.distributions.representation import experimental_pdf
+from upscaling_app.upscaling.distributions.representation import empirical_cdf
 from upscaling_app.upscaling.distributions.rosin_rammler import (
     rosin_rammler_cdf,
+    rosin_rammler_pdf,
+    rosin_rammler_quantile,
 )
 
-from scipy.stats import rankdata, wilcoxon
-
 FIT_METRICS = {
-    "cdf": {
-        "CDF RMSE": "cdf_rmse",
-        "CDF max error": "cdf_max_error",
-        "Bin-mass RMSE": "cdf_mass_rmse",
-        "Bin-mass max error": "cdf_mass_max_error",
-        "Total variation": "cdf_total_variation",
-    },
-    "moments": {
-        "CDF RMSE": "moment_cdf_rmse",
-        "CDF max error": "moment_cdf_max_error",
-        "Bin-mass RMSE": "moment_mass_rmse",
-        "Bin-mass max error": "moment_mass_max_error",
-        "Total variation": "moment_total_variation",
-    },
+    "CDF MAE": "cdf_mae",
+    "CDF RMSE": "cdf_rmse",
+    "CDF max error": "cdf_max_error",
 }
-
-
-PAIRED_FIT_METRICS = {
-    "cdf_rmse": (
-        "cdf_rmse",
-        "moment_cdf_rmse",
-    ),
-    "cdf_max_error": (
-        "cdf_max_error",
-        "moment_cdf_max_error",
-    ),
-    "mass_rmse": (
-        "cdf_mass_rmse",
-        "moment_mass_rmse",
-    ),
-    "mass_max_error": (
-        "cdf_mass_max_error",
-        "moment_mass_max_error",
-    ),
-    "total_variation": (
-        "cdf_total_variation",
-        "moment_total_variation",
-    ),
-}
-
 
 DISTRIBUTION_REGIME_ORDER = [
     "Untreated",
@@ -65,27 +24,126 @@ DISTRIBUTION_REGIME_ORDER = [
 ]
 
 
+def empirical_quantile(
+    diameter: np.ndarray,
+    cumulative_fraction: np.ndarray,
+    quantile: float,
+) -> float:
+    diameter = np.asarray(diameter, dtype=float)
+    cumulative_fraction = np.asarray(cumulative_fraction, dtype=float)
+
+    if diameter.ndim != 1 or cumulative_fraction.ndim != 1:
+        raise ValueError("diameter and cumulative_fraction must be one-dimensional.")
+
+    if diameter.size != cumulative_fraction.size:
+        raise ValueError("diameter and cumulative_fraction must have the same size.")
+
+    if diameter.size == 0:
+        raise ValueError("At least one diameter value is required.")
+
+    if not np.all(np.isfinite(diameter)):
+        raise ValueError("diameter contains non-finite values.")
+
+    if not np.all(np.isfinite(cumulative_fraction)):
+        raise ValueError("cumulative_fraction contains non-finite values.")
+
+    if np.any(diameter <= 0.0):
+        raise ValueError("diameter must be positive.")
+
+    if np.any(np.diff(diameter) <= 0.0):
+        raise ValueError("diameter must be strictly increasing.")
+
+    if np.any((cumulative_fraction < 0.0) | (cumulative_fraction > 1.0)):
+        raise ValueError("cumulative_fraction must be between 0 and 1.")
+
+    if np.any(np.diff(cumulative_fraction) < 0.0):
+        raise ValueError("cumulative_fraction must be non-decreasing.")
+
+    if not 0.0 < quantile < 1.0:
+        raise ValueError("quantile must be between 0 and 1.")
+
+    if cumulative_fraction[-1] < quantile:
+        raise ValueError("quantile is outside the cumulative distribution range.")
+
+    index = int(np.searchsorted(cumulative_fraction, quantile, side="left"))
+
+    if index == 0:
+        return float(diameter[0])
+
+    d0 = diameter[index - 1]
+    d1 = diameter[index]
+    f0 = cumulative_fraction[index - 1]
+    f1 = cumulative_fraction[index]
+
+    if f1 <= f0:
+        return float(d1)
+
+    fraction = (quantile - f0) / (f1 - f0)
+
+    return float(d0 + fraction * (d1 - d0))
+
+
+def _validate_parameter_table(
+    parameters: pd.DataFrame,
+) -> pd.DataFrame:
+    required = {
+        "experiment_id",
+        "shape",
+        "scale",
+    }
+    missing = required - set(parameters.columns)
+
+    if missing:
+        raise ValueError(
+            "Missing fitted parameter columns: " + ", ".join(sorted(missing))
+        )
+
+    if parameters.empty:
+        raise ValueError("No fitted distribution parameters were provided.")
+
+    if parameters["experiment_id"].isna().any():
+        raise ValueError("parameters contains missing experiment_id values.")
+
+    if parameters["experiment_id"].duplicated().any():
+        raise ValueError("parameters contains duplicated experiment_id values.")
+
+    for column in ("shape", "scale"):
+        values = parameters[column].to_numpy(dtype=float)
+        invalid = ~np.isfinite(values) | (values <= 0.0)
+
+        if invalid.any():
+            raise ValueError(f"parameters contains invalid {column} values.")
+
+    return parameters.set_index("experiment_id")
+
+
 def evaluate_distribution_fits(
     distributions: pd.DataFrame,
     parameters: pd.DataFrame,
 ) -> pd.DataFrame:
-    if parameters["experiment_id"].duplicated().any():
-        raise ValueError("parameters contains duplicated experiment_id values.")
+    required = {
+        "experiment_id",
+        "droplet_diameter",
+        "volume_fraction",
+    }
+    missing = required - set(distributions.columns)
 
-    parameter_table = parameters.set_index("experiment_id")
+    if missing:
+        raise ValueError("Missing distribution columns: " + ", ".join(sorted(missing)))
 
+    if distributions.empty:
+        raise ValueError("No experimental distributions were provided.")
+
+    parameter_table = _validate_parameter_table(parameters)
     rows = []
 
-    for (
-        experiment_id,
-        distribution,
-    ) in distributions.groupby(
+    for experiment_id, distribution in distributions.groupby(
         "experiment_id",
         sort=False,
     ):
         if experiment_id not in parameter_table.index:
             raise ValueError(
-                "Missing fitted parameters for " f"experiment {experiment_id}."
+                f"Missing fitted parameters for experiment {experiment_id}."
             )
 
         distribution = distribution.sort_values("droplet_diameter").reset_index(
@@ -93,119 +151,105 @@ def evaluate_distribution_fits(
         )
 
         diameter = distribution["droplet_diameter"].to_numpy(dtype=float)
-
         volume_fraction = distribution["volume_fraction"].to_numpy(dtype=float)
-
         cumulative_fraction = empirical_cdf(volume_fraction)
-
-        pdf_edges, _ = experimental_pdf(
-            diameter=diameter,
-            volume_fraction=volume_fraction,
-        )
-
-        cdf_diameter = pdf_edges[1:]
-
         fitted = parameter_table.loc[experiment_id]
 
-        # -----------------------------------------------------
-        # Method A — direct CDF fit
-        # -----------------------------------------------------
+        shape = float(fitted["shape"])
+        scale = float(fitted["scale"])
 
-        cdf_shape = float(fitted["cdf_shape"])
+        distribution_d50 = empirical_quantile(
+            diameter=diameter,
+            cumulative_fraction=cumulative_fraction,
+            quantile=0.5,
+        )
 
-        cdf_scale = float(fitted["cdf_scale"])
+        fitted_d50 = rosin_rammler_quantile(
+            quantile=0.5,
+            shape=shape,
+            scale=scale,
+        )
 
         cdf_prediction = rosin_rammler_cdf(
-            diameter=cdf_diameter,
-            shape=cdf_shape,
-            scale=cdf_scale,
+            diameter=diameter,
+            shape=shape,
+            scale=scale,
         )
 
-        (
-            cdf_rmse,
-            cdf_max_error,
-        ) = cdf_error_metrics(
+        cdf_mae, cdf_rmse, cdf_max_error = cdf_error_metrics(
             experimental=cumulative_fraction,
             predicted=cdf_prediction,
-        )
-
-        cdf_prediction_edges = rosin_rammler_cdf(
-            diameter=pdf_edges,
-            shape=cdf_shape,
-            scale=cdf_scale,
-        )
-
-        cdf_bin_fraction = np.diff(cdf_prediction_edges)
-
-        (
-            cdf_mass_rmse,
-            cdf_mass_max_error,
-            cdf_total_variation,
-        ) = distribution_mass_metrics(
-            experimental=volume_fraction,
-            predicted=cdf_bin_fraction,
-        )
-
-        # -----------------------------------------------------
-        # Method B — discrete moments
-        # -----------------------------------------------------
-
-        moment_shape = float(fitted["moment_shape"])
-
-        moment_scale = float(fitted["moment_scale"])
-
-        moment_prediction = rosin_rammler_cdf(
-            diameter=cdf_diameter,
-            shape=moment_shape,
-            scale=moment_scale,
-        )
-
-        (
-            moment_cdf_rmse,
-            moment_cdf_max_error,
-        ) = cdf_error_metrics(
-            experimental=cumulative_fraction,
-            predicted=moment_prediction,
-        )
-
-        moment_prediction_edges = rosin_rammler_cdf(
-            diameter=pdf_edges,
-            shape=moment_shape,
-            scale=moment_scale,
-        )
-
-        moment_bin_fraction = np.diff(moment_prediction_edges)
-
-        (
-            moment_mass_rmse,
-            moment_mass_max_error,
-            moment_total_variation,
-        ) = distribution_mass_metrics(
-            experimental=volume_fraction,
-            predicted=moment_bin_fraction,
         )
 
         rows.append(
             {
                 "experiment_id": experiment_id,
-                "cdf_shape": cdf_shape,
-                "cdf_scale": cdf_scale,
+                "shape": shape,
+                "scale": scale,
+                "distribution_d50": distribution_d50,
+                "fitted_d50": fitted_d50,
+                "cdf_mae": cdf_mae,
                 "cdf_rmse": cdf_rmse,
                 "cdf_max_error": cdf_max_error,
-                "cdf_mass_rmse": cdf_mass_rmse,
-                "cdf_mass_max_error": cdf_mass_max_error,
-                "cdf_total_variation": cdf_total_variation,
-                "moment_shape": moment_shape,
-                "moment_scale": moment_scale,
-                "moment_cdf_rmse": moment_cdf_rmse,
-                "moment_cdf_max_error": moment_cdf_max_error,
-                "moment_mass_rmse": moment_mass_rmse,
-                "moment_mass_max_error": moment_mass_max_error,
-                "moment_total_variation": moment_total_variation,
             }
         )
 
     return pd.DataFrame(rows)
+
+
+def build_cdf_validation_points(
+    distributions: pd.DataFrame,
+    parameters: pd.DataFrame,
+) -> pd.DataFrame:
+    parameter_table = _validate_parameter_table(parameters)
+    frames = []
+
+    for experiment_id, distribution in distributions.groupby(
+        "experiment_id",
+        sort=False,
+    ):
+        if experiment_id not in parameter_table.index:
+            raise ValueError(
+                f"Missing fitted parameters for experiment {experiment_id}."
+            )
+
+        data = distribution.sort_values("droplet_diameter").reset_index(drop=True)
+
+        diameter = data["droplet_diameter"].to_numpy(dtype=float)
+        volume_fraction = data["volume_fraction"].to_numpy(dtype=float)
+        experimental_cdf = empirical_cdf(volume_fraction)
+        fitted = parameter_table.loc[experiment_id]
+
+        fitted_cdf = rosin_rammler_cdf(
+            diameter=diameter,
+            shape=float(fitted["shape"]),
+            scale=float(fitted["scale"]),
+        )
+
+        frames.append(
+            pd.DataFrame(
+                {
+                    "experiment_id": experiment_id,
+                    "droplet_diameter": diameter,
+                    "experimental_cdf": experimental_cdf,
+                    "fitted_cdf": fitted_cdf,
+                    "cdf_residual": fitted_cdf - experimental_cdf,
+                }
+            )
+        )
+
+    if not frames:
+        return pd.DataFrame(
+            columns=[
+                "experiment_id",
+                "droplet_diameter",
+                "experimental_cdf",
+                "fitted_cdf",
+                "cdf_residual",
+            ]
+        )
+
+    return pd.concat(frames, ignore_index=True)
 
 
 def summarize_distribution_fit_metrics(
@@ -213,160 +257,54 @@ def summarize_distribution_fit_metrics(
 ) -> pd.DataFrame:
     rows = []
 
-    for method, metrics in FIT_METRICS.items():
-        for metric_name, column in metrics.items():
-            if column not in evaluation.columns:
-                raise ValueError(f"Missing fit metric column: {column}")
+    for metric_name, column in FIT_METRICS.items():
+        if column not in evaluation.columns:
+            raise ValueError(f"Missing fit metric column: {column}")
 
-            values = evaluation[column].to_numpy(dtype=float)
+        values = evaluation[column].to_numpy(dtype=float)
+        values = values[np.isfinite(values)]
 
-            values = values[np.isfinite(values)]
+        if values.size == 0:
+            raise ValueError(f"No finite values available for {column}.")
 
-            if values.size == 0:
-                raise ValueError(f"No finite values available for {column}.")
-
-            rows.append(
-                {
-                    "method": method,
-                    "metric": metric_name,
-                    "mean": np.mean(values),
-                    "median": np.median(values),
-                    "p90": np.quantile(
-                        values,
-                        0.90,
-                    ),
-                    "p95": np.quantile(
-                        values,
-                        0.95,
-                    ),
-                    "max": np.max(values),
-                }
-            )
-
-    return pd.DataFrame(rows)
-
-
-def compare_distribution_fit_methods(
-    evaluation: pd.DataFrame,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    comparison = evaluation[
-        [
-            "experiment_id",
-            "oil_id",
-            "dispersion_kind",
-            "dispersion_tag",
-            "nozzle_diameter",
-            "has_gas",
-        ]
-    ].copy()
-
-    summary_rows = []
-
-    for (
-        metric,
-        (
-            cdf_column,
-            moment_column,
-        ),
-    ) in PAIRED_FIT_METRICS.items():
-        cdf_values = evaluation[cdf_column].to_numpy(dtype=float)
-
-        moment_values = evaluation[moment_column].to_numpy(dtype=float)
-
-        delta = moment_values - cdf_values
-
-        comparison[f"{metric}_cdf"] = cdf_values
-
-        comparison[f"{metric}_moments"] = moment_values
-
-        comparison[f"{metric}_delta"] = delta
-
-        tie = np.isclose(
-            delta,
-            0.0,
-            rtol=1e-9,
-            atol=1e-12,
-        )
-
-        cdf_wins = (delta > 0.0) & ~tie
-
-        moment_wins = (delta < 0.0) & ~tie
-
-        winner = np.full(
-            len(delta),
-            "tie",
-            dtype=object,
-        )
-
-        winner[cdf_wins] = "cdf"
-        winner[moment_wins] = "moments"
-
-        comparison[f"{metric}_winner"] = winner
-
-        n = len(delta)
-
-        summary_rows.append(
+        rows.append(
             {
-                "metric": metric,
-                "n": n,
-                "cdf_wins": int(np.sum(cdf_wins)),
-                "moment_wins": int(np.sum(moment_wins)),
-                "ties": int(np.sum(tie)),
-                "cdf_win_fraction": (np.sum(cdf_wins) / n),
-                "moment_win_fraction": (np.sum(moment_wins) / n),
-                "mean_delta": np.mean(delta),
-                "median_delta": np.median(delta),
-                "p10_delta": np.quantile(
-                    delta,
-                    0.10,
-                ),
-                "p90_delta": np.quantile(
-                    delta,
-                    0.90,
-                ),
+                "metric": metric_name,
+                "mean": float(np.mean(values)),
+                "std": float(np.std(values, ddof=1)) if values.size > 1 else 0.0,
+                "median": float(np.median(values)),
+                "p90": float(np.quantile(values, 0.90)),
+                "p95": float(np.quantile(values, 0.95)),
+                "max": float(np.max(values)),
             }
         )
 
-    summary = pd.DataFrame(summary_rows)
-
-    return (
-        comparison,
-        summary,
-    )
+    return pd.DataFrame(rows)
 
 
 def add_distribution_regime(
     data: pd.DataFrame,
 ) -> pd.DataFrame:
     result = data.copy()
-
     regimes = []
 
     for row in result.itertuples(index=False):
         dispersion_kind = str(row.dispersion_kind).strip().lower()
-
         dispersion_tag = str(row.dispersion_tag).strip().lower()
 
         if dispersion_kind == "untreated":
             regime = "Untreated"
-
         elif dispersion_kind == "ssmd":
             regime = "SSMD"
-
         elif dispersion_kind == "ssdi":
             if "c9500" in dispersion_tag:
                 regime = "SSDI — Corexit"
-
             elif "ibc" in dispersion_tag:
                 regime = "SSDI — Finasol"
-
             else:
-                raise ValueError(
-                    "Unknown SSDI dispersion tag: " f"{row.dispersion_tag}"
-                )
-
+                raise ValueError(f"Unknown SSDI dispersion tag: {row.dispersion_tag}")
         else:
-            raise ValueError("Unknown dispersion kind: " f"{row.dispersion_kind}")
+            raise ValueError(f"Unknown dispersion kind: {row.dispersion_kind}")
 
         regimes.append(regime)
 
@@ -375,11 +313,10 @@ def add_distribution_regime(
     return result
 
 
-def summarize_fit_method_comparison_by_regime(
-    comparison: pd.DataFrame,
+def summarize_distribution_fit_metrics_by_regime(
+    evaluation: pd.DataFrame,
 ) -> pd.DataFrame:
-    data = add_distribution_regime(comparison)
-
+    data = add_distribution_regime(evaluation)
     rows = []
 
     for regime in DISTRIBUTION_REGIME_ORDER:
@@ -388,156 +325,285 @@ def summarize_fit_method_comparison_by_regime(
         if subset.empty:
             continue
 
-        for metric in PAIRED_FIT_METRICS:
-            cdf_column = f"{metric}_cdf"
-            moment_column = f"{metric}_moments"
-            delta_column = f"{metric}_delta"
-            winner_column = f"{metric}_winner"
+        for metric_name, column in FIT_METRICS.items():
+            values = subset[column].to_numpy(dtype=float)
+            values = values[np.isfinite(values)]
 
-            cdf_values = subset[cdf_column].to_numpy(dtype=float)
-            moment_values = subset[moment_column].to_numpy(dtype=float)
-            delta = subset[delta_column].to_numpy(dtype=float)
-            winner = subset[winner_column].to_numpy()
-
-            cdf_mean = float(np.mean(cdf_values))
-            moment_mean = float(np.mean(moment_values))
-
-            if moment_mean > 0.0:
-                mean_improvement_pct = 100.0 * (moment_mean - cdf_mean) / moment_mean
-            else:
-                mean_improvement_pct = np.nan
+            if values.size == 0:
+                continue
 
             rows.append(
                 {
                     "regime": regime,
-                    "metric": metric,
-                    "n": len(subset),
-                    "cdf_mean": cdf_mean,
-                    "moment_mean": moment_mean,
-                    "cdf_median": float(np.median(cdf_values)),
-                    "moment_median": float(np.median(moment_values)),
-                    "mean_improvement_pct": (mean_improvement_pct),
-                    "cdf_wins": int(np.sum(winner == "cdf")),
-                    "moment_wins": int(np.sum(winner == "moments")),
-                    "ties": int(np.sum(winner == "tie")),
-                    "cdf_win_fraction": float(np.mean(winner == "cdf")),
-                    "mean_delta": float(np.mean(delta)),
-                    "median_delta": float(np.median(delta)),
+                    "metric": metric_name,
+                    "n": int(values.size),
+                    "mean": float(np.mean(values)),
+                    "std": (float(np.std(values, ddof=1)) if values.size > 1 else 0.0),
+                    "median": float(np.median(values)),
+                    "p90": float(np.quantile(values, 0.90)),
+                    "p95": float(np.quantile(values, 0.95)),
+                    "max": float(np.max(values)),
                 }
             )
 
     return pd.DataFrame(rows)
 
 
-def _holm_adjust(
-    p_values: np.ndarray,
-) -> np.ndarray:
-    p_values = np.asarray(
-        p_values,
-        dtype=float,
+def build_distribution_fit_curves(
+    distribution: pd.DataFrame,
+    fitted: pd.Series,
+) -> dict[str, np.ndarray | float]:
+    distribution = distribution.sort_values("droplet_diameter").reset_index(drop=True)
+
+    diameter = distribution["droplet_diameter"].to_numpy(dtype=float)
+    volume_fraction = distribution["volume_fraction"].to_numpy(dtype=float)
+    cumulative_fraction = empirical_cdf(volume_fraction)
+
+    pdf_edges, experimental_density = experimental_pdf(
+        diameter=diameter,
+        volume_fraction=volume_fraction,
     )
 
-    n = len(p_values)
+    shape = float(fitted["shape"])
+    scale = float(fitted["scale"])
 
-    order = np.argsort(p_values)
-
-    adjusted = np.empty(
-        n,
-        dtype=float,
+    fitted_cdf_at_data = rosin_rammler_cdf(
+        diameter=diameter,
+        shape=shape,
+        scale=scale,
     )
 
-    running_max = 0.0
+    experimental_d999 = empirical_quantile(
+        diameter=diameter,
+        cumulative_fraction=cumulative_fraction,
+        quantile=0.999,
+    )
 
-    for rank, index in enumerate(order):
-        value = (n - rank) * p_values[index]
+    fitted_d999 = rosin_rammler_quantile(
+        quantile=0.999,
+        shape=shape,
+        scale=scale,
+    )
 
-        value = min(
-            value,
-            1.0,
-        )
+    plot_max_diameter = 1.15 * max(
+        experimental_d999,
+        float(fitted_d999),
+    )
 
-        running_max = max(
-            running_max,
-            value,
-        )
+    rr_min = max(
+        float(pdf_edges[0]),
+        np.finfo(float).tiny,
+    )
 
-        adjusted[index] = running_max
+    rr_diameter = np.geomspace(
+        rr_min,
+        plot_max_diameter,
+        500,
+    )
 
-    return adjusted
+    fitted_cdf = rosin_rammler_cdf(
+        diameter=rr_diameter,
+        shape=shape,
+        scale=scale,
+    )
+
+    fitted_pdf = rosin_rammler_pdf(
+        diameter=rr_diameter,
+        shape=shape,
+        scale=scale,
+    )
+
+    return {
+        "diameter": diameter,
+        "experimental_cdf": cumulative_fraction,
+        "fitted_cdf_at_data": fitted_cdf_at_data,
+        "pdf_edges": pdf_edges,
+        "experimental_pdf": experimental_density,
+        "rr_diameter": rr_diameter,
+        "fitted_cdf": fitted_cdf,
+        "fitted_pdf": fitted_pdf,
+        "plot_max_diameter": plot_max_diameter,
+    }
 
 
-def test_distribution_fit_improvement(
-    comparison: pd.DataFrame,
+def add_d50_diagnostics(
+    evaluation: pd.DataFrame,
 ) -> pd.DataFrame:
-    rows = []
+    required = {
+        "measured_d50",
+        "distribution_d50",
+        "fitted_d50",
+    }
+    missing = required - set(evaluation.columns)
 
-    for metric in PAIRED_FIT_METRICS:
-        delta_column = f"{metric}_delta"
-
-        if delta_column not in comparison.columns:
-            raise ValueError(f"Missing comparison column: {delta_column}")
-
-        delta = comparison[delta_column].to_numpy(dtype=float)
-
-        delta = delta[np.isfinite(delta)]
-
-        if delta.size == 0:
-            raise ValueError(f"No finite values available for {metric}.")
-
-        nonzero = delta[
-            ~np.isclose(
-                delta,
-                0.0,
-                rtol=1e-9,
-                atol=1e-12,
-            )
-        ]
-
-        if nonzero.size == 0:
-            statistic = np.nan
-            p_value = 1.0
-            rank_biserial = 0.0
-
-        else:
-            test = wilcoxon(
-                nonzero,
-                alternative="greater",
-                zero_method="wilcox",
-                correction=False,
-                method="auto",
-            )
-
-            statistic = float(test.statistic)
-
-            p_value = float(test.pvalue)
-
-            ranks = rankdata(
-                np.abs(nonzero),
-                method="average",
-            )
-
-            positive_rank_sum = np.sum(ranks[nonzero > 0.0])
-            negative_rank_sum = np.sum(ranks[nonzero < 0.0])
-            total_rank_sum = positive_rank_sum + negative_rank_sum
-            rank_biserial = (positive_rank_sum - negative_rank_sum) / total_rank_sum
-
-        rows.append(
-            {
-                "metric": metric,
-                "n": len(delta),
-                "n_nonzero": len(nonzero),
-                "median_delta": float(np.median(delta)),
-                "mean_delta": float(np.mean(delta)),
-                "cdf_win_fraction": float(np.mean(delta > 0.0)),
-                "wilcoxon_statistic": (statistic),
-                "p_value": (p_value),
-                "rank_biserial": float(rank_biserial),
-            }
+    if missing:
+        raise ValueError(
+            "Missing D50 diagnostic columns: " + ", ".join(sorted(missing))
         )
 
-    result = pd.DataFrame(rows)
+    result = evaluation.copy()
 
-    result["p_value_holm"] = _holm_adjust(result["p_value"].to_numpy(dtype=float))
-    result["significant_0_05"] = result["p_value_holm"] < 0.05
+    for column in required:
+        values = result[column].to_numpy(dtype=float)
+
+        if not np.all(np.isfinite(values)) or np.any(values <= 0.0):
+            raise ValueError(f"{column} must contain finite positive values.")
+
+    fit_error = result["fitted_d50"] - result["distribution_d50"]
+    fit_relative_error = fit_error / result["distribution_d50"]
+
+    result["fit_d50_error"] = fit_error
+    result["fit_d50_abs_error"] = np.abs(fit_error)
+    result["fit_d50_relative_error"] = fit_relative_error
+    result["fit_d50_abs_relative_error"] = np.abs(fit_relative_error)
+
+    source_error = result["distribution_d50"] - result["measured_d50"]
+    source_relative_error = source_error / result["measured_d50"]
+
+    result["source_d50_error"] = source_error
+    result["source_d50_abs_error"] = np.abs(source_error)
+    result["source_d50_relative_error"] = source_relative_error
+    result["source_d50_abs_relative_error"] = np.abs(source_relative_error)
 
     return result
+
+
+def _summarize_d50_pair(
+    reference: np.ndarray,
+    estimate: np.ndarray,
+    *,
+    comparison: str,
+    reference_name: str,
+    estimate_name: str,
+) -> dict[str, float | int | str]:
+    reference = np.asarray(reference, dtype=float)
+    estimate = np.asarray(estimate, dtype=float)
+
+    if reference.size != estimate.size:
+        raise ValueError("D50 reference and estimate must have the same size.")
+
+    if reference.size == 0:
+        raise ValueError("No D50 values are available for comparison.")
+
+    if (
+        not np.all(np.isfinite(reference))
+        or not np.all(np.isfinite(estimate))
+        or np.any(reference <= 0.0)
+        or np.any(estimate <= 0.0)
+    ):
+        raise ValueError("D50 comparisons require finite positive values.")
+
+    error = estimate - reference
+    relative_error = error / reference
+    absolute_relative_error = np.abs(relative_error)
+
+    reference_mean = np.mean(reference)
+    total_sum_squares = np.sum((reference - reference_mean) ** 2)
+    residual_sum_squares = np.sum(error**2)
+
+    log_reference = np.log(reference)
+    log_estimate = np.log(estimate)
+    log_error = log_estimate - log_reference
+    log_total_sum_squares = np.sum((log_reference - np.mean(log_reference)) ** 2)
+
+    return {
+        "comparison": comparison,
+        "reference": reference_name,
+        "estimate": estimate_name,
+        "n": int(reference.size),
+        "rmse": float(np.sqrt(np.mean(error**2))),
+        "mae": float(np.mean(np.abs(error))),
+        "bias": float(np.mean(error)),
+        "std_error": float(np.std(error, ddof=1)) if error.size > 1 else 0.0,
+        "mape_pct": float(100.0 * np.mean(absolute_relative_error)),
+        "median_abs_relative_error_pct": float(
+            100.0 * np.median(absolute_relative_error)
+        ),
+        "p95_abs_relative_error_pct": float(
+            100.0 * np.quantile(absolute_relative_error, 0.95)
+        ),
+        "max_abs_relative_error_pct": float(100.0 * np.max(absolute_relative_error)),
+        "r2": (
+            float(1.0 - residual_sum_squares / total_sum_squares)
+            if total_sum_squares > 0.0
+            else np.nan
+        ),
+        "log_mse": float(np.mean(log_error**2)),
+        "r2_log": (
+            float(1.0 - np.sum(log_error**2) / log_total_sum_squares)
+            if log_total_sum_squares > 0.0
+            else np.nan
+        ),
+    }
+
+
+def summarize_d50_diagnostics(
+    evaluation: pd.DataFrame,
+) -> pd.DataFrame:
+    required = {
+        "distribution_d50",
+        "fitted_d50",
+        "measured_d50",
+    }
+    missing = required - set(evaluation.columns)
+
+    if missing:
+        raise ValueError("Missing D50 summary columns: " + ", ".join(sorted(missing)))
+
+    distribution_d50 = evaluation["distribution_d50"].to_numpy(dtype=float)
+
+    rows = [
+        _summarize_d50_pair(
+            reference=distribution_d50,
+            estimate=evaluation["fitted_d50"].to_numpy(dtype=float),
+            comparison="fit_vs_distribution",
+            reference_name="distribution_d50",
+            estimate_name="fitted_d50",
+        ),
+        _summarize_d50_pair(
+            reference=evaluation["measured_d50"].to_numpy(dtype=float),
+            estimate=distribution_d50,
+            comparison="distribution_vs_reported",
+            reference_name="measured_d50",
+            estimate_name="distribution_d50",
+        ),
+    ]
+
+    return pd.DataFrame(rows)
+
+
+def select_representative_fit_cases(
+    evaluation: pd.DataFrame,
+    metric: str = "cdf_rmse",
+    n_each: int = 3,
+) -> pd.DataFrame:
+    if metric not in evaluation.columns:
+        raise ValueError(f"Unknown ranking metric: {metric}")
+
+    if len(evaluation) < 3 * n_each:
+        raise ValueError("Not enough experiments to select representative fit cases.")
+
+    ranked = evaluation.sort_values(metric).reset_index(drop=True)
+
+    best = ranked.head(n_each).copy()
+    best["case_group"] = "best"
+    best["case_rank"] = np.arange(1, len(best) + 1)
+
+    middle_start = len(ranked) // 2 - n_each // 2
+    middle = ranked.iloc[middle_start : middle_start + n_each].copy()
+    middle["case_group"] = "middle"
+    middle["case_rank"] = np.arange(1, len(middle) + 1)
+
+    worst = ranked.tail(n_each).copy()
+    worst = worst.sort_values(metric, ascending=False).reset_index(drop=True)
+    worst["case_group"] = "worst"
+    worst["case_rank"] = np.arange(1, len(worst) + 1)
+
+    return pd.concat(
+        [
+            best,
+            middle,
+            worst,
+        ],
+        ignore_index=True,
+    )

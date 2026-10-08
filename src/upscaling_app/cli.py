@@ -9,6 +9,9 @@ import argcomplete
 from upscaling_app.commands.analysis import (
     register_analysis_commands,
 )
+from upscaling_app.commands.distributions import (
+    register_distribution_commands,
+)
 from upscaling_app.commands.database import (
     register_database_commands,
 )
@@ -56,6 +59,10 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     register_ssmd_commands(
+        subparsers,
+    )
+
+    register_distribution_commands(
         subparsers,
     )
 

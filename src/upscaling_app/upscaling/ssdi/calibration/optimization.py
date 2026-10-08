@@ -10,7 +10,6 @@ from scipy.optimize import least_squares
 
 from upscaling_app.upscaling.ssdi.physics.model import (
     calculate_d_pred,
-    calculate_d_pred_newton,
 )
 
 
@@ -33,25 +32,6 @@ def loss_fn(params, we, ca, d_exp):
 loss_and_grad = jax.jit(jax.value_and_grad(loss_fn))
 
 
-@jax.jit
-def loss_fn_newton(params, we, ca, d_exp):
-    a, b = params
-
-    d_pred = calculate_d_pred_newton(
-        we,
-        ca,
-        a,
-        b,
-    )
-
-    log_error = jnp.log(d_exp) - jnp.log(d_pred)
-
-    return jnp.mean(log_error**2)
-
-
-loss_and_grad_newton = jax.jit(jax.value_and_grad(loss_fn_newton))
-
-
 def optimize_coefficients(
     we,
     ca,
@@ -62,22 +42,26 @@ def optimize_coefficients(
         float | None,
         float | None,
     ] = (1e-3, None),
-    solver: str = "fixed_point",
 ) -> tuple[float, float, float]:
-    we = jnp.asarray(we, dtype=jnp.float64)
-    ca = jnp.asarray(ca, dtype=jnp.float64)
-    d_exp = jnp.asarray(d_exp, dtype=jnp.float64)
-
-    if solver == "fixed_point":
-        loss_gradient = loss_and_grad
-    elif solver == "newton":
-        loss_gradient = loss_and_grad_newton
-    else:
-        raise ValueError(f"Unknown SSDI solver: {solver!r}")
+    we = jnp.asarray(
+        we,
+        dtype=jnp.float64,
+    )
+    ca = jnp.asarray(
+        ca,
+        dtype=jnp.float64,
+    )
+    d_exp = jnp.asarray(
+        d_exp,
+        dtype=jnp.float64,
+    )
 
     def objective(params):
-        loss, gradient = loss_gradient(
-            jnp.asarray(params, dtype=jnp.float64),
+        loss, gradient = loss_and_grad(
+            jnp.asarray(
+                params,
+                dtype=jnp.float64,
+            ),
             we,
             ca,
             d_exp,
@@ -85,13 +69,34 @@ def optimize_coefficients(
 
         return (
             float(loss),
-            np.asarray(gradient, dtype=float),
+            np.asarray(
+                gradient,
+                dtype=float,
+            ),
         )
 
     initial_guess = np.array(
-        [a_initial, b_initial],
+        [
+            a_initial,
+            b_initial,
+        ],
         dtype=float,
     )
+
+    initial_loss = float(
+        loss_fn(
+            jnp.asarray(
+                initial_guess,
+                dtype=jnp.float64,
+            ),
+            we,
+            ca,
+            d_exp,
+        )
+    )
+
+    if not np.isfinite(initial_loss):
+        raise RuntimeError("Initial SSDI calibration loss is non-finite.")
 
     bounds = [
         (1e-3, None),
@@ -106,10 +111,25 @@ def optimize_coefficients(
         bounds=bounds,
     )
 
+    if not result.success:
+        raise RuntimeError("SSDI optimization failed: " f"{result.message}")
+
+    if not np.all(np.isfinite(result.x)) or not np.isfinite(result.fun):
+        raise RuntimeError(
+            "SSDI optimization returned " "non-finite parameters or loss."
+        )
+
+    final_loss = float(result.fun)
+
+    if final_loss > initial_loss:
+        raise RuntimeError(
+            "SSDI optimization returned a worse " "solution than the initial guess."
+        )
+
     return (
         float(result.x[0]),
         float(result.x[1]),
-        float(result.fun),
+        final_loss,
     )
 
 

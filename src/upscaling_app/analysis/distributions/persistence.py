@@ -3,37 +3,22 @@ import pandas as pd
 from upscaling_app import paths
 
 
-def save_distribution_fit_evaluation(
+def save_distribution_fit_analysis(
     evaluation: pd.DataFrame,
+    cdf_points: pd.DataFrame,
+    fit_summary: pd.DataFrame,
+    fit_summary_by_regime: pd.DataFrame,
+    d50_summary: pd.DataFrame,
 ) -> None:
     if "experiment_id" not in evaluation.columns:
         raise ValueError("evaluation must contain experiment_id.")
 
     if evaluation["experiment_id"].duplicated().any():
         raise ValueError(
-            "Distribution evaluation contains duplicated " "experiment_id values."
+            "Distribution evaluation contains duplicated experiment_id values."
         )
 
     path = paths.DISTRIBUTION_FIT_EVALUATION_PATH
-
-    path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    evaluation.to_excel(
-        path,
-        index=False,
-    )
-
-
-def save_distribution_method_comparison(
-    global_summary: pd.DataFrame,
-    paired_comparison: pd.DataFrame,
-    by_regime: pd.DataFrame,
-    statistical_tests: pd.DataFrame,
-) -> None:
-    path = paths.DISTRIBUTION_METHOD_COMPARISON_PATH
 
     path.parent.mkdir(
         parents=True,
@@ -44,26 +29,32 @@ def save_distribution_method_comparison(
         path,
         engine="openpyxl",
     ) as writer:
-        global_summary.to_excel(
+        evaluation.to_excel(
             writer,
-            sheet_name="global_summary",
+            sheet_name="evaluation",
             index=False,
         )
 
-        paired_comparison.to_excel(
+        cdf_points.to_excel(
             writer,
-            sheet_name="paired_comparison",
+            sheet_name="cdf_points",
             index=False,
         )
 
-        by_regime.to_excel(
+        fit_summary.to_excel(
             writer,
-            sheet_name="by_regime",
+            sheet_name="fit_summary",
             index=False,
         )
 
-        statistical_tests.to_excel(
+        fit_summary_by_regime.to_excel(
             writer,
-            sheet_name="statistical_tests",
+            sheet_name="fit_by_regime",
+            index=False,
+        )
+
+        d50_summary.to_excel(
+            writer,
+            sheet_name="d50_summary",
             index=False,
         )

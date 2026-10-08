@@ -30,7 +30,6 @@ def calibrate_ssdi(
     experiments: pd.DataFrame,
     b_grid: tuple[float, float] = (0.01, 1.0),
     b_bounds: tuple[float | None, float | None] = (1e-3, None),
-    solver: str = "fixed_point",
 ) -> CalibrationResult:
     we, ca, d50_d = prepare_calibration_arrays(experiments)
 
@@ -40,7 +39,6 @@ def calibrate_ssdi(
         d50_d,
         b_min=b_grid[0],
         b_max=b_grid[1],
-        solver=solver,
     )
 
     a_optimized, b_optimized, loss = optimize_coefficients(

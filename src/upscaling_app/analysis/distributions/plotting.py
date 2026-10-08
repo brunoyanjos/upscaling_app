@@ -4,83 +4,22 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from upscaling_app.plotting.colors import (
-    get_gray,
-    get_base_color,
-)
+from upscaling_app.plotting.colors import get_gray
+from upscaling_app.plotting.style import apply_plot_style
 
 
-def save_cdf_comparison(
-    diameter: np.ndarray,
-    experimental_cdf: np.ndarray,
-    rr_cdf: np.ndarray,
-    output: Path,
-    *,
-    experimental_color: str,
-) -> None:
-    output.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    fig, ax = plt.subplots(figsize=(8, 6))
-
-    ax.plot(
-        diameter * 1e3,
-        experimental_cdf,
-        color=experimental_color,
-        linewidth=2.0,
-        marker="o",
-        markersize=3,
-        label="Experimental",
-    )
-
-    ax.plot(
-        diameter * 1e3,
-        rr_cdf,
-        color=get_gray("regression"),
-        linewidth=2.0,
-        linestyle="--",
-        label="Rosin-Rammler",
-    )
-
-    ax.set_xlabel("Droplet diameter [mm]")
-
-    ax.set_ylabel("Cumulative volume fraction [-]")
-
-    ax.set_ylim(
-        0.0,
-        1.0,
-    )
-
-    ax.grid(
-        color=get_gray("grid"),
-        alpha=0.8,
-    )
-
-    ax.legend()
-
-    fig.tight_layout()
-
-    fig.savefig(
-        output,
-        dpi=300,
-        bbox_inches="tight",
-    )
-
-    plt.close(fig)
-
-
-def save_pdf_comparison(
+def save_pdf_fit(
     edges: np.ndarray,
     experimental_density: np.ndarray,
     rr_diameter: np.ndarray,
-    cdf_fit_density: np.ndarray,
-    moment_fit_density: np.ndarray,
+    fitted_density: np.ndarray,
     output: Path,
     *,
     experimental_color: str,
+    plot_max_diameter: float,
 ) -> None:
+    apply_plot_style()
+
     output.parent.mkdir(
         parents=True,
         exist_ok=True,
@@ -94,31 +33,24 @@ def save_pdf_comparison(
         experimental_density / 1e3,
         edges * 1e3,
         color=experimental_color,
-        linewidth=2.0,
+        linewidth=2.2,
         label="Experimental",
+        zorder=3,
     )
 
     ax.plot(
         rr_diameter * 1e3,
-        cdf_fit_density / 1e3,
+        fitted_density / 1e3,
         color=get_gray("regression"),
-        linewidth=2.0,
-        linestyle="--",
-        label="RR — direct CDF fit",
-    )
-
-    ax.plot(
-        rr_diameter * 1e3,
-        moment_fit_density / 1e3,
-        color=get_gray("dark"),
-        linewidth=1.8,
-        linestyle=":",
-        label="RR — discrete moments",
+        linewidth=2.2,
+        label="Rosin–Rammler fit",
+        zorder=2,
     )
 
     ax.set_xlabel("Droplet diameter [mm]")
-
-    ax.set_ylabel("Volume density [mm⁻¹]")
+    ax.set_ylabel(r"Volume density [mm$^{-1}$]")
+    ax.set_xlim(0.0, plot_max_diameter * 1e3)
+    ax.set_ylim(bottom=0.0)
 
     ax.grid(
         color=get_gray("grid"),
@@ -128,78 +60,152 @@ def save_pdf_comparison(
     ax.legend()
 
     fig.tight_layout()
-
     fig.savefig(
         output,
         dpi=300,
         bbox_inches="tight",
     )
-
     plt.close(fig)
 
 
-def save_method_win_fraction_plot(
-    comparison_summary: pd.DataFrame,
+def save_cdf_fit(
+    diameter: np.ndarray,
+    experimental_cdf: np.ndarray,
+    fitted_cdf_at_data: np.ndarray,
+    rr_diameter: np.ndarray,
+    fitted_cdf: np.ndarray,
     output: Path,
+    *,
+    experimental_color: str,
+    plot_max_diameter: float,
 ) -> None:
+    """Save the experimental CDF and its Rosin–Rammler reconstruction.
+
+    ``fitted_cdf_at_data`` is retained in the function signature for compatibility
+    with the current pipeline. It is intentionally not plotted because those
+    values are samples of the same continuous Rosin–Rammler curve and therefore
+    do not represent an independent data series.
+    """
+    apply_plot_style()
+
     output.parent.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    metric_labels = {
-        "cdf_rmse": "CDF RMSE",
-        "cdf_max_error": "CDF max error",
-        "mass_rmse": "Bin-mass RMSE",
-        "mass_max_error": "Bin-mass max error",
-        "total_variation": "Total variation",
-    }
-
-    metric_order = list(metric_labels)
-
-    data = comparison_summary.set_index("metric").loc[metric_order].reset_index()
-
-    x = np.arange(len(data))
-
-    width = 0.38
+    # Keep the existing pipeline contract without introducing a redundant
+    # visual series in the figure.
+    _ = fitted_cdf_at_data
 
     fig, ax = plt.subplots(
-        figsize=(10, 6),
+        figsize=(8, 6),
     )
 
-    ax.bar(
-        x - width / 2,
-        data["cdf_win_fraction"] * 100.0,
-        width=width,
+    ax.scatter(
+        diameter * 1e3,
+        experimental_cdf,
+        s=38,
+        color=experimental_color,
+        label="Experimental",
+        zorder=3,
+    )
+
+    ax.plot(
+        rr_diameter * 1e3,
+        fitted_cdf,
+        color=get_gray("regression"),
+        linewidth=2.2,
+        label="Rosin–Rammler fit",
+        zorder=2,
+    )
+
+    ax.set_xlabel("Droplet diameter [mm]")
+    ax.set_ylabel("Cumulative volume fraction [-]")
+    ax.set_xlim(0.0, plot_max_diameter * 1e3)
+    ax.set_ylim(0.0, 1.02)
+
+    ax.grid(
+        color=get_gray("grid"),
+        alpha=0.8,
+    )
+
+    ax.legend()
+
+    fig.tight_layout()
+    fig.savefig(
+        output,
+        dpi=300,
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
+def _parity_limits(
+    reference: np.ndarray,
+    estimate: np.ndarray,
+) -> tuple[float, float]:
+    upper = 1.05 * max(
+        float(np.max(reference)),
+        float(np.max(estimate)),
+    )
+
+    return 0.0, upper
+
+
+def save_d50_parity_plot(
+    evaluation: pd.DataFrame,
+    output: Path,
+) -> None:
+    """Parity of fitted D50 against the distribution-reconstructed D50."""
+    apply_plot_style()
+
+    output.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    reference = evaluation["distribution_d50"].to_numpy(dtype=float) * 1e3
+    estimated = evaluation["fitted_d50"].to_numpy(dtype=float) * 1e3
+
+    lower, upper = _parity_limits(
+        reference,
+        estimated,
+    )
+
+    fig, ax = plt.subplots(
+        figsize=(8, 8),
+    )
+
+    ax.scatter(
+        reference,
+        estimated,
+        s=45,
+        alpha=0.75,
         color=get_gray("dark"),
-        label="Direct CDF fit",
+        label="Rosin–Rammler fit",
+        zorder=3,
     )
 
-    ax.bar(
-        x + width / 2,
-        data["moment_win_fraction"] * 100.0,
-        width=width,
-        color=get_gray("medium"),
-        label="Discrete moments",
+    ax.plot(
+        [lower, upper],
+        [lower, upper],
+        linestyle="--",
+        linewidth=1.8,
+        color=get_gray("identity"),
+        label="Identity",
+        zorder=2,
     )
 
-    ax.set_xticks(x)
-
-    ax.set_xticklabels(
-        [metric_labels[metric] for metric in data["metric"]],
-        rotation=20,
-        ha="right",
-    )
-
-    ax.set_ylabel("Experiments won [%]")
-
-    ax.set_ylim(
-        0.0,
-        105.0,
+    ax.set_xlabel(r"Distribution-reconstructed $D_{50}$ [mm]")
+    ax.set_ylabel(r"Fitted $D_{50}$ [mm]")
+    ax.set_xlim(lower, upper)
+    ax.set_ylim(lower, upper)
+    ax.set_aspect(
+        "equal",
+        adjustable="box",
     )
 
     ax.grid(
-        axis="y",
         color=get_gray("grid"),
         alpha=0.8,
     )
@@ -207,102 +213,130 @@ def save_method_win_fraction_plot(
     ax.legend()
 
     fig.tight_layout()
-
     fig.savefig(
         output,
         dpi=300,
         bbox_inches="tight",
     )
-
     plt.close(fig)
 
 
-def save_method_improvement_by_regime_plot(
-    comparison_by_regime: pd.DataFrame,
+def save_d50_source_parity_plot(
+    evaluation: pd.DataFrame,
     output: Path,
 ) -> None:
+    """Diagnostic parity between reported and distribution-reconstructed D50."""
+    apply_plot_style()
+
     output.parent.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    metric_labels = {
-        "cdf_rmse": "CDF RMSE",
-        "cdf_max_error": "CDF max error",
-        "mass_rmse": "Bin-mass RMSE",
-        "mass_max_error": "Bin-mass max error",
-        "total_variation": "Total variation",
-    }
+    reported = evaluation["measured_d50"].to_numpy(dtype=float) * 1e3
+    reconstructed = evaluation["distribution_d50"].to_numpy(dtype=float) * 1e3
 
-    metric_order = list(metric_labels)
-
-    regime_order = [
-        "Untreated",
-        "SSDI — Corexit",
-        "SSDI — Finasol",
-        "SSMD",
-    ]
-
-    regime_colors = {
-        "Untreated": get_base_color("untreated"),
-        "SSDI — Corexit": get_base_color("ssdi_corexit"),
-        "SSDI — Finasol": get_base_color("ssdi_finasol"),
-        "SSMD": get_base_color("ssmd"),
-    }
-
-    y = np.arange(len(metric_order))
-
-    bar_height = 0.18
+    lower, upper = _parity_limits(
+        reported,
+        reconstructed,
+    )
 
     fig, ax = plt.subplots(
-        figsize=(10, 7),
+        figsize=(8, 8),
     )
 
-    for index, regime in enumerate(regime_order):
-        subset = (
-            comparison_by_regime.loc[comparison_by_regime["regime"] == regime]
-            .set_index("metric")
-            .loc[metric_order]
-        )
+    ax.scatter(
+        reported,
+        reconstructed,
+        s=45,
+        alpha=0.75,
+        color=get_gray("dark"),
+        label="Distribution reconstruction",
+        zorder=3,
+    )
 
-        offset = (index - (len(regime_order) - 1) / 2) * bar_height
-
-        ax.barh(
-            y + offset,
-            subset["mean_improvement_pct"].to_numpy(dtype=float),
-            height=bar_height,
-            color=regime_colors[regime],
-            label=regime,
-        )
-
-    ax.axvline(
-        0.0,
+    ax.plot(
+        [lower, upper],
+        [lower, upper],
+        linestyle="--",
+        linewidth=1.8,
         color=get_gray("identity"),
-        linewidth=1.5,
+        label="Identity",
+        zorder=2,
     )
 
-    ax.set_yticks(y)
-
-    ax.set_yticklabels([metric_labels[metric] for metric in metric_order])
-
-    ax.set_xlabel("Mean error reduction relative to discrete moments [%]")
+    ax.set_xlabel(r"Reported $D_{50}$ [mm]")
+    ax.set_ylabel(r"Distribution-reconstructed $D_{50}$ [mm]")
+    ax.set_xlim(lower, upper)
+    ax.set_ylim(lower, upper)
+    ax.set_aspect(
+        "equal",
+        adjustable="box",
+    )
 
     ax.grid(
-        axis="x",
         color=get_gray("grid"),
         alpha=0.8,
     )
 
     ax.legend()
 
-    ax.invert_yaxis()
-
     fig.tight_layout()
-
     fig.savefig(
         output,
         dpi=300,
         bbox_inches="tight",
     )
+    plt.close(fig)
 
+
+def save_d50_relative_error_plot(
+    evaluation: pd.DataFrame,
+    output: Path,
+) -> None:
+    apply_plot_style()
+
+    output.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    reference = evaluation["distribution_d50"].to_numpy(dtype=float) * 1e3
+    relative_error = evaluation["fit_d50_relative_error"].to_numpy(dtype=float) * 100.0
+
+    fig, ax = plt.subplots(
+        figsize=(8, 6),
+    )
+
+    ax.scatter(
+        reference,
+        relative_error,
+        s=45,
+        alpha=0.75,
+        color=get_gray("dark"),
+        zorder=3,
+    )
+
+    ax.axhline(
+        0.0,
+        linestyle="--",
+        linewidth=1.8,
+        color=get_gray("identity"),
+        zorder=2,
+    )
+
+    ax.set_xlabel(r"Distribution-reconstructed $D_{50}$ [mm]")
+    ax.set_ylabel(r"Fitted $D_{50}$ relative error [%]")
+
+    ax.grid(
+        color=get_gray("grid"),
+        alpha=0.8,
+    )
+
+    fig.tight_layout()
+    fig.savefig(
+        output,
+        dpi=300,
+        bbox_inches="tight",
+    )
     plt.close(fig)

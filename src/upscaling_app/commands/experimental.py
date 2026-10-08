@@ -45,6 +45,16 @@ def _run_experimental_ssmd(
     run_ssmd_experimental_workflow()
 
 
+def _run_experimental_distributions(
+    args: argparse.Namespace,
+) -> None:
+    from upscaling_app.analysis.experimental.distributions.pipeline import (
+        run_distribution_experimental_workflow,
+    )
+
+    run_distribution_experimental_workflow()
+
+
 def register_experimental_analysis_commands(
     analysis_subparsers: argparse._SubParsersAction,
 ) -> None:
@@ -104,4 +114,13 @@ def register_experimental_analysis_commands(
 
     ssmd_parser.set_defaults(
         handler=_run_experimental_ssmd,
+    )
+
+    distributions_parser = commands.add_parser(
+        "distributions",
+        help="Analyze experimental droplet-size distributions.",
+    )
+
+    distributions_parser.set_defaults(
+        handler=_run_experimental_distributions,
     )

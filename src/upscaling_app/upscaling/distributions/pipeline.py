@@ -1,24 +1,46 @@
+from __future__ import annotations
+
+from time import perf_counter
+
 import pandas as pd
 
-from upscaling_app.upscaling.distributions.fitting import (
-    fit_rosin_rammler,
-    fit_rosin_rammler_from_moments,
+from upscaling_app.analysis.experimental.data import load_distributions
+from upscaling_app.upscaling.distributions.fitting import fit_rosin_rammler
+from upscaling_app.upscaling.distributions.persistence import (
+    save_distribution_parameters,
 )
-from upscaling_app.upscaling.distributions.representation import (
-    empirical_cdf,
-    experimental_pdf,
+from upscaling_app.upscaling.distributions.reporting import (
+    report_distribution_fit,
 )
+from upscaling_app.upscaling.distributions.representation import empirical_cdf
 
 
 def fit_distribution_parameters(
     distributions: pd.DataFrame,
 ) -> pd.DataFrame:
-    rows = []
+    required_columns = {
+        "experiment_id",
+        "droplet_diameter",
+        "volume_fraction",
+    }
 
-    for (
-        experiment_id,
-        distribution,
-    ) in distributions.groupby(
+    missing = required_columns.difference(distributions.columns)
+
+    if missing:
+        raise ValueError(
+            "Distribution data is missing required columns: "
+            + ", ".join(sorted(missing))
+        )
+
+    if distributions.empty:
+        raise ValueError("No experimental distributions available for fitting.")
+
+    if distributions["experiment_id"].isna().any():
+        raise ValueError("Distribution data contains missing experiment_id values.")
+
+    rows: list[dict[str, float | str]] = []
+
+    for experiment_id, distribution in distributions.groupby(
         "experiment_id",
         sort=False,
     ):
@@ -32,33 +54,43 @@ def fit_distribution_parameters(
 
         cumulative_fraction = empirical_cdf(volume_fraction)
 
-        pdf_edges, _ = experimental_pdf(
+        shape, scale = fit_rosin_rammler(
             diameter=diameter,
-            volume_fraction=volume_fraction,
-        )
-
-        cdf_diameter = pdf_edges[1:]
-
-        # Method A — direct CDF fit
-        cdf_shape, cdf_scale = fit_rosin_rammler(
-            diameter=cdf_diameter,
             cumulative_fraction=cumulative_fraction,
-        )
-
-        # Method B — discrete moments
-        moment_shape, moment_scale = fit_rosin_rammler_from_moments(
-            diameter=diameter,
-            volume_fraction=volume_fraction,
         )
 
         rows.append(
             {
                 "experiment_id": experiment_id,
-                "cdf_shape": cdf_shape,
-                "cdf_scale": cdf_scale,
-                "moment_shape": moment_shape,
-                "moment_scale": moment_scale,
+                "shape": shape,
+                "scale": scale,
             }
         )
 
-    return pd.DataFrame(rows)
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "experiment_id",
+            "shape",
+            "scale",
+        ],
+    )
+
+
+def run_distribution_fit_workflow() -> pd.DataFrame:
+    start_time = perf_counter()
+
+    distributions = load_distributions()
+
+    parameters = fit_distribution_parameters(distributions)
+
+    save_distribution_parameters(parameters)
+
+    elapsed_seconds = perf_counter() - start_time
+
+    report_distribution_fit(
+        parameters=parameters,
+        elapsed_seconds=elapsed_seconds,
+    )
+
+    return parameters

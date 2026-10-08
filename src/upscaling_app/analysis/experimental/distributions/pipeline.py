@@ -7,14 +7,14 @@ from upscaling_app.analysis.experimental.data import (
     load_distributions,
     load_experiments,
 )
-from upscaling_app.analysis.experimental.distribution_consistency.analysis import (
+from upscaling_app.analysis.experimental.distributions.analysis import (
     analyze_distribution_consistency,
 )
-from upscaling_app.analysis.experimental.distribution_consistency.plotting import (
+from upscaling_app.analysis.experimental.distributions.plotting import (
     save_d50_consistency_plot,
     save_reported_percentile_plot,
 )
-from upscaling_app.analysis.experimental.distribution_consistency.reporting import (
+from upscaling_app.analysis.experimental.distributions.reporting import (
     print_distribution_consistency_report,
 )
 
@@ -44,7 +44,7 @@ def run_distribution_consistency_analysis() -> DistributionConsistencyResult:
     )
 
 
-def run_distribution_consistency_workflow() -> DistributionConsistencyResult:
+def run_distribution_experimental_workflow() -> DistributionConsistencyResult:
     result = run_distribution_consistency_analysis()
 
     output_dir = paths.RESULTS_DIR / "experimental" / "distribution_consistency"

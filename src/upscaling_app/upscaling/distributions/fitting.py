@@ -1,9 +1,6 @@
 import numpy as np
 from scipy.optimize import least_squares
 
-from scipy.optimize import brentq
-from scipy.special import gamma
-
 from upscaling_app.upscaling.distributions.rosin_rammler import (
     rosin_rammler_cdf,
 )
@@ -15,6 +12,9 @@ def fit_rosin_rammler(
 ) -> tuple[float, float]:
     diameter = np.asarray(diameter, dtype=float)
     cumulative_fraction = np.asarray(cumulative_fraction, dtype=float)
+
+    if diameter.ndim != 1 or cumulative_fraction.ndim != 1:
+        raise ValueError("diameter and cumulative_fraction must be one-dimensional.")
 
     if diameter.size != cumulative_fraction.size:
         raise ValueError("diameter and cumulative_fraction must have the same size.")
@@ -35,30 +35,38 @@ def fit_rosin_rammler(
         raise ValueError("cumulative_fraction must be between 0 and 1.")
 
     order = np.argsort(diameter)
-
     diameter = diameter[order]
     cumulative_fraction = cumulative_fraction[order]
+
+    if np.any(np.diff(diameter) <= 0.0):
+        raise ValueError("diameter must contain unique values.")
 
     if np.any(np.diff(cumulative_fraction) < 0.0):
         raise ValueError("cumulative_fraction must be non-decreasing.")
 
     target_probability = 1.0 - np.exp(-1.0)
-
-    initial_scale = float(
-        np.interp(
-            target_probability,
-            cumulative_fraction,
-            diameter,
-        )
+    # Search the first crossing; the empirical CDF may contain plateaus.
+    crossing = int(
+        np.searchsorted(cumulative_fraction, target_probability, side="left")
     )
-
+    if crossing == 0:
+        initial_scale = float(diameter[0])
+    elif crossing == diameter.size:
+        initial_scale = float(diameter[-1])
+    else:
+        probability_left = cumulative_fraction[crossing - 1]
+        probability_right = cumulative_fraction[crossing]
+        fraction = (target_probability - probability_left) / (
+            probability_right - probability_left
+        )
+        initial_scale = float(
+            diameter[crossing - 1]
+            + fraction * (diameter[crossing] - diameter[crossing - 1])
+        )
     initial_shape = 2.0
 
-    def residual(
-        parameters: np.ndarray,
-    ) -> np.ndarray:
-        shape = parameters[0]
-        scale = parameters[1]
+    def residual(parameters: np.ndarray) -> np.ndarray:
+        shape, scale = parameters
 
         predicted = rosin_rammler_cdf(
             diameter=diameter,
@@ -70,12 +78,7 @@ def fit_rosin_rammler(
 
     result = least_squares(
         residual,
-        x0=np.array(
-            [
-                initial_shape,
-                initial_scale,
-            ]
-        ),
+        x0=np.array([initial_shape, initial_scale], dtype=float),
         bounds=(
             np.finfo(float).eps,
             np.inf,
@@ -84,57 +87,8 @@ def fit_rosin_rammler(
     )
 
     if not result.success:
-        raise RuntimeError("Rosin-Rammler fitting failed: " f"{result.message}")
+        raise RuntimeError(f"Rosin-Rammler fitting failed: {result.message}")
 
-    shape = float(result.x[0])
-    scale = float(result.x[1])
+    shape, scale = result.x
 
-    return shape, scale
-
-
-def fit_rosin_rammler_from_moments(
-    diameter: np.ndarray,
-    volume_fraction: np.ndarray,
-) -> tuple[float, float]:
-    diameter = np.asarray(
-        diameter,
-        dtype=float,
-    )
-
-    volume_fraction = np.asarray(
-        volume_fraction,
-        dtype=float,
-    )
-
-    if diameter.size != volume_fraction.size:
-        raise ValueError("diameter and volume_fraction must have the same size.")
-
-    weights = volume_fraction / volume_fraction.sum()
-
-    mean = np.sum(weights * diameter)
-
-    variance = np.sum(weights * (diameter - mean) ** 2)
-
-    std = np.sqrt(variance)
-
-    cv_squared = (std / mean) ** 2
-
-    def residual(
-        shape: float,
-    ) -> float:
-        return (
-            gamma(1.0 + 2.0 / shape) / gamma(1.0 + 1.0 / shape) ** 2 - 1.0 - cv_squared
-        )
-
-    shape = brentq(
-        residual,
-        0.1,
-        100.0,
-    )
-
-    scale = mean / gamma(1.0 + 1.0 / shape)
-
-    return (
-        float(shape),
-        float(scale),
-    )
+    return float(shape), float(scale)
