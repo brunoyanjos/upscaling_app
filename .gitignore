@@ -45,6 +45,7 @@ data/processed/*
 data/database/*
 data/exports/*
 data/figures/*
+scripts/*
 
 # Keep folder structure
 !data/raw/.gitkeep
