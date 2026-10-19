@@ -157,7 +157,7 @@ def optimize_coefficients_oil_wise(
         a, b = params
 
         d_pred = np.asarray(
-            calculate_d_pred_newton(
+            calculate_d_pred(
                 we,
                 ca,
                 a,

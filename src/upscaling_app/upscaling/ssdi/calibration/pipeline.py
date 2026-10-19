@@ -75,7 +75,6 @@ def calibrate_ssdi_oil_wise(
         d50_d,
         b_min=-0.5,
         b_max=1.0,
-        solver="newton",
     )
 
     a_optimized, b_optimized, loss = optimize_coefficients_oil_wise(

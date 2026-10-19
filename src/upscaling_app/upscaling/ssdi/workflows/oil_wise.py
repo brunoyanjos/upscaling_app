@@ -57,7 +57,6 @@ def run_oil_wise() -> pd.DataFrame:
             a=calibration.a_optimized,
             b=calibration.b_optimized,
             model_version=OIL_WISE_VERSION,
-            solver="newton",
         )
 
         prediction_frames.append(
