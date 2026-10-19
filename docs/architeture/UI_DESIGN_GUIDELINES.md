@@ -23,40 +23,19 @@
 | `huge` | 48 | Large visual breathing space |
 | `massive` | 64 | Only when a large desktop layout requires it |
 
-## Desktop typography and accessibility
+## Desktop typography
 
-Typography tokens are defined in `upscaling_app.gui.theme` and interpreted as
-logical Qt pixels before the user's text-scale preference is applied.
-
-| Token | Base font size | Target line height | Primary use |
+| Token | Font size | Target line height | Primary use |
 | --- | ---: | ---: | --- |
 | `h1` | 32 px | 40 px | Screen title |
-| `h2` | 28 px | 36 px | Large result value |
+| `h2` | 28 px | 36 px | Section title and large result value |
 | `h3` | 20 px | 28 px | Card title |
 | `body_lg` | 18 px | 28 px | Emphasized prose |
-| `body_md` | 16 px | 24 px | Standard text and controls |
-| `body_sm` | 14 px | 20 px | Secondary labels, notes |
-| `caption` | 12 px | 16 px | Nonessential detail |
+| `body_md` | 16 px | 24 px | Standard text, controls |
+| `body_sm` | 14 px | 20 px | Secondary text, notes |
+| `caption` | 12 px | 16 px | Rare, nonessential microcopy |
 
-The user can select **100%, 125%, or 150%** text size. The default 100% must
-already be legible. Use `build_stylesheet(scale)`, `scaled_type()` and
-`scaled_space()` from `gui/theme.py` rather than manually scaling fonts in views.
-Spacing, paddings and widget dimensions should still align to the 4-pixel grid.
-
-The desktop preference is persisted using `QSettings("UpscalingApp", "UpscalingApp")`
-with the key `accessibility/text_scale`. A view must preserve form state when
-reapplying an accessibility scale; never reset a user's scientific inputs.
-
-The window content must reflow or scroll gracefully at 150%. Avoid fixed heights
-for text-heavy labels, and use word wrapping. The operating system handles
-screen DPI scaling; do not forcibly disable or override it.
-
-The palette should use dark, high-contrast text on light backgrounds and clearly
-readable sidebar labels. Selected, hover, focus and disabled states must be
-visually distinct. Test with actual Windows, WSLg/Linux and macOS scaling.
-
-**Qt limitation:** Qt Style Sheets do not implement web CSS `line-height`. The
-listed line heights are layout targets, not CSS properties.
+**Qt limitation:** Qt Style Sheets do not implement web CSS `line-height`. Use the token's font size in QSS, and set appropriate minimum height or layout spacing where needed. For wrapped text, allow Qt's layout engine to determine the required height. Check the appearance on Windows, Linux/WSLg, and macOS with real system scaling; Qt logical pixels are not necessarily physical display pixels.
 
 ## Components and behavior
 
@@ -72,3 +51,14 @@ listed line heights are layout targets, not CSS properties.
 ## Project integration
 
 Shared tokens and styles live in `src/upscaling_app/gui/theme.py`. Individual views such as `ssdi_window.py` use these shared tokens. Add a reference to this document in `AGENTS.md` so future coding agents follow the same conventions.
+
+## SSDI prototype — interaction and maintainability checkpoint (2026-10-19)
+
+- Continue using `theme.py` as the single source for colours, spacing, radii, and typography. Supported application text-size options are 100%, 125%, and 150% (in addition to OS DPI scaling).
+- The four calibration choices must show selected and disabled states. Oil-wise is unavailable for `Custom oil` and has one calibrated `A,B` pair per eligible registered oil.
+- The optional property assistant must distinguish *available* from *locked*. It must not silently populate operating-condition viscosity or IFT without explicit user action.
+- Prediction results should present the D50 hero, separate Re/We/Ca tiles, selected calibration provenance, and a clearly separated field-scale extrapolation notice. Never label a field-scale extrapolation as validated.
+- The `Predict D50` button may display `Calculating…` while an asynchronous worker runs. Do not block the UI thread, use artificial progress delays, or show stale results.
+- Smooth scrolling should not steal focus or jump to inaccessible widgets during expanding/collapsing layouts. Avoid dereferencing Qt wrappers after their underlying C++ objects have been deleted.
+- The ~1,900-line SSDI view needs incremental extraction. See `SSDI_GUI_REFACTORING_PLAN.md` for target boundaries; do not use styling changes as a pretext for a large behavioural rewrite.
+- **Typography note:** this document's values have been aligned to the actual `TYPOGRAPHY` constants in the shared `theme.py` snapshot inspected on 2026-10-19. Recheck if that file changes.

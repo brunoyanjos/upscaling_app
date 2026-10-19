@@ -4,7 +4,7 @@
 
 This file defines the working conventions for coding agents operating in this repository.
 
-Read `README.md` and `docs/PROJECT_CONTEXT.md` before making structural changes.
+Read `README.md` and `docs/PROJECT_CONTEXT.md` before making structural changes. For GUI work also read `docs/UI_DESIGN_GUIDELINES.md`, `docs/MILESTONE_06_SSDI_FIELD_SCALE_UPSCALING.md`, and `docs/SSDI_GUI_REFACTORING_PLAN.md`. For resumption after the October 2026 pause, read `docs/CHECKPOINT_2026-10-19_SSDI_GUI_MVP.md`.
 
 ## Project Structure
 
@@ -21,6 +21,7 @@ database/        raw-data normalization and database construction
 upscaling/       physical models and modelling pipelines
 analysis/        statistical analysis and diagnostics
 models/          shared domain/data models
+gui/             PySide6 presentation (SSDI prototype)
 cli.py           command-line entry point
 paths.py         project paths
 ```
@@ -161,6 +162,18 @@ Prefer vectorized and differentiable formulations when appropriate.
 
 Numerical precision choices must be explicit for scientific calculations.
 
+## SSDI desktop GUI contract
+
+- The GUI is a presentation and orchestration layer, not a second implementation of SSDI equations, optimization, calibration, or database normalization.
+- Reuse `upscaling.ssdi.prediction` for single-scenario D50 and `upscaling.ssdi.model_catalog` for **persisted** model coefficients. Do not hard-code coefficients in widgets.
+- A `jax_oil_wise` calibration requires a registered oil with matching persisted coefficients; `Custom oil` is not oil-wise eligible. Preserve explicit `model_version`, `oil_id`, and coefficient provenance.
+- UI input units differ from SI; convert at the presentation/service boundary, never inside the existing physical equations.
+- UI scalar inference currently forces the JAX **CPU** backend before JAX-related imports. Do not apply the same restriction globally to scientific CLI workflows.
+- Qt widgets must be touched only on the main GUI thread. Use signals to return numerical results from a worker. Do not allow stale worker output to replace results if inputs, calibration, oil, or text-scale generation changed.
+- Before deleting/rebuilding Qt widgets, handle active worker ownership and signal connections. Protect closing/re-rendering against deleted C++ objects; use `shiboken6.isValid` where lifecycle may be uncertain.
+- Keep the stable `python -m upscaling_app.gui.ssdi_window` launch route working during incremental refactoring.
+- The current window is a **technical-debt prototype** (~1,900 lines). Follow `docs/SSDI_GUI_REFACTORING_PLAN.md` for extraction in small, behaviour-preserving steps; do not introduce new scientific models as part of UI cleanup.
+
 ## Configuration
 
 Dataset selection, model settings, optimizer settings, and analysis options should move toward configuration files rather than hard-coded constants.
@@ -206,4 +219,4 @@ Milestone 5 — Experimental Analysis architecture
 
 Before structural changes, consult the corresponding milestone and research documents.
 
-The next distribution research questions concern normalized shape behaviour and possible prediction of the Rosin–Rammler shape parameter `k`. These remain exploratory and must stay separate from the stable distribution fitting workflow.
+Milestone 6 — SSDI Field-Scale Upscaling has a D50-only desktop GUI prototype, **not a scientifically validated field-scale predictor**. Part 2 (complete distributions, shape `k` and scale `lambda`) is research still to do. Before extending distributions, capture a fresh runnable GUI source snapshot, fix/test the asynchronous worker lifecycle and record known input/model assumptions. Preserve the stable Milestone 4 distribution-fitting baseline; explore shape transfer separately.

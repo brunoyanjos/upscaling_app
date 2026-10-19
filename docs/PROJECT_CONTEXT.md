@@ -31,11 +31,14 @@ Status: Completed
 
 Milestone 5 — Experimental Analysis
 Status: Closed for the current project stage
+
+Milestone 6 — SSDI Field-Scale Upscaling and GUI
+Status: In progress; prototype implemented, verification and distributions open
 ```
 
 The core reconstruction phase is now substantially stabilized. Distribution representation and fitting were explicitly reviewed before closure, including the coordinate convention used for the empirical CDF.
 
-The next scientific work is research-oriented rather than reconstruction-oriented. For droplet distributions, the next open questions concern normalized shape behaviour and possible prediction of the Rosin–Rammler shape parameter `k`.
+The next scientific work is research-oriented rather than reconstruction-oriented. Milestone 6 now has a D50-only PySide6 desktop prototype; its scientific field-scale validity is **not established**. For droplet distributions, the next open questions concern normalized shape behaviour and possible prediction of the Rosin–Rammler shape parameter `k`.
 
 ## Current architecture
 
@@ -63,6 +66,7 @@ upscaling_app/
 │       │   ├── ssdi/
 │       │   ├── ssmd/
 │       │   └── distributions/
+│       ├── gui/               # SSDI PySide6 prototype and shared theme
 │       ├── cli.py
 │       └── paths.py
 ├── pyproject.toml
@@ -215,6 +219,38 @@ predictive validation
 ```
 
 The complete-population leave-one-oil-out workflow remains the principal cross-oil validation within the current campaign. Oil-wise calibrations and reduced-population studies remain diagnostic and must not be confused with external validation.
+
+## Milestone 6 — SSDI field-scale prediction and desktop GUI (2026-10-19 checkpoint)
+
+The desktop prototype is launched from the repository root with:
+
+```bash
+python -m upscaling_app.gui.ssdi_window
+```
+
+**Architecture observed in the latest shared source snapshot and reported development:**
+
+```text
+PySide6 view (gui/ssdi_window.py)
+  -> normalized oil properties and optional IFT references (database-facing IO)
+  -> persisted SSDI calibration loader (model_catalog.py)
+  -> SI scenario normalization and validation at the presentation boundary
+  -> upscaling.ssdi.prediction.predict_field_ssdi
+       -> physics.derived_properties.add_ssdi_physics
+       -> physics.model.calculate_d_pred (JAX)
+  -> D50, D50/D, Re, We, Ca and applicability notice
+```
+
+- Supported calibration modes: `sintef_baseline`, `jax_baseline_all`, `jax_exclude_3016_4662_4665`, `jax_oil_wise`. Oil-wise coefficients are selected by joining persisted prediction `experiment_id` to normalized experiment `oil_id`. Custom oil cannot use the oil-wise mode.
+- Oil properties: reference density and estimated stabilized-oil dynamic viscosity at 20/40/50 °C; temperature interpolation is optional. Estimates are **not gas-saturated PVT properties**. Oil density is not automatically made release-condition density.
+- IFT: optional laboratory lookup for untreated, Corexit 9500A and Finasol IBC where references exist. Oils with unresolved reference discrepancies must not receive unsupported automatic IFT values. The user may enter appropriate field IFT manually.
+- Scenario UI units: diameter mm, oil flow m³/day, local GOR m³/m³, density kg/m³, dynamic viscosity mPa·s, IFT mN/m. SI boundary: m, m³/s, kg/m³, Pa·s, N/m.
+- Interactive presentation: 100/125/150% text scaling, oil selector, expandable property assistant, four calibration buttons, `Predict D50` with calculating state and `QThread`, dimensionless metrics, smooth scrolling, extrapolation warning.
+- The GUI process currently requests the JAX CPU backend before scientific imports; this avoids unnecessary GPU VRAM preallocation for scalar inference.
+
+**Scientific status:** D50 computation is available and the illustrative 3016-treated-field scenario has been visually checked by the developer at approximately `2.0030 mm` with global coefficients. This is a **numerical reproducibility fingerprint**, not field validation. The dataset's laboratory nozzle diameters are 2–3 mm; a 470 mm nozzle is a major extrapolation. Multivariate domain analysis, field-property provenance (including gas density/GOR) and independent field validation are outstanding.
+
+**Technical status:** the ~1,900-line `ssdi_window.py` is a provisional UI/controller monolith. The last uploaded snapshot preceded a local correction of `_predict_d50` indentation, so it is not an independently runnable source baseline. The developer reports having corrected it. Before further features, obtain a fresh committed code snapshot, run smoke/regression tests, and implement worker-lifecycle protection (edits or rescaling while calculating, close during worker execution, stale results, deleted Qt objects). See `SSDI_GUI_REFACTORING_PLAN.md` and `CHECKPOINT_2026-10-19_SSDI_GUI_MVP.md`.
 
 ## SSMD status
 

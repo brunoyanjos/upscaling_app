@@ -9,7 +9,8 @@ The project currently covers:
 - SSMD modelling and predictive validation;
 - experimental-data analysis;
 - droplet-size distribution fitting and fit-quality analysis;
-- JAX-based parameter estimation where applicable.
+- JAX-based parameter estimation where applicable;
+- a prototype PySide6 desktop interface for SSDI field-scale D50 prediction.
 
 ## Project structure
 
@@ -29,6 +30,7 @@ upscaling_app/
 │       │   ├── ssmd/
 │       │   └── distributions/
 │       ├── database/
+│       ├── gui/                # PySide6 SSDI prototype and shared theme
 │       ├── upscaling/
 │       │   ├── ssdi/
 │       │   ├── ssmd/
@@ -38,6 +40,19 @@ upscaling_app/
 ├── pyproject.toml
 └── README.md
 ```
+
+## Project documentation
+
+The repository documentation is organized by purpose:
+
+- **[Project context](docs/PROJECT_CONTEXT.md)** — architecture, design decisions, scientific scope, and current development status.
+- **[Development milestones](docs/milestones/)** — historical scope, implementation status, and outstanding tasks. The active effort is [Milestone 6 — SSDI Field-Scale Upscaling](docs/milestones/MILESTONE_06_SSDI_FIELD_SCALE_UPSCALING.md).
+- **[GUI refactoring plan](docs/architecture/SSDI_GUI_REFACTORING_PLAN.md)** — incremental decomposition of the PySide6 prototype without changing the scientific model.
+- **[UI design guidelines](docs/architecture/UI_DESIGN_GUIDELINES.md)** — visual conventions and text scaling for the desktop interface.
+- **[Distribution research goals](docs/research/DISTRIBUTIONS_RESEARCH_GOALS_UPDATED.md)** — open research questions for full droplet-size distribution prediction.
+- **[Latest checkpoint (2026-10-19)](docs/checkpoints/CHECKPOINT_2026-10-19_SSDI_GUI_MVP.md)** — recorded MVP status, known limitations, and the next steps for resuming development.
+
+For automated coding assistants and contributors, start with [AGENTS.md](AGENTS.md) before modifying the architecture or scientific workflows.
 
 ## Installation
 
@@ -123,6 +138,20 @@ upscaling analyze experimental ssmd
 
 SSDI and SSMD expose their modelling, performance, sensitivity, oil-wise, and predictive-validation workflows through the project CLI according to their milestone documentation.
 
+### SSDI desktop prototype (Milestone 6)
+
+From the repository root, after installing the package and its GUI dependencies:
+
+```bash
+python -m upscaling_app.gui.ssdi_window
+```
+
+The prototype currently presents oil selection or manual oil properties, optional viscosity/IFT reference assistance, four persisted calibration modes (SINTEF, global 10 oils, retained 7 oils, oil-wise for known oils), field-scale SSDI `D50`, `Re`, `We`, `Ca`, and an extrapolation notice. It displays input units to the user and normalizes the scenario to SI for the scientific prediction function. The model equations and fitting routines are not implemented by the GUI.
+
+The GUI currently configures JAX for **CPU execution** before the scientific imports, avoiding GPU preallocation for single-case inference. This setting applies to the GUI process only, not to the `upscaling` CLI or other modelling jobs.
+
+**Status:** functional prototype reported by the developer, **not** a released or independently validated field-scale model. Robustness testing of the asynchronous `QThread` workflow, calibration-laboratory regression checks, multidimensional applicability diagnostics, and exporting reproducible scenario/results are still pending. See `docs/milestones/MILESTONE_06_SSDI_FIELD_SCALE_UPSCALING.md` and `docs/checkpoints/CHECKPOINT_2026-10-19_SSDI_GUI_MVP.md`.
+
 ## Development status
 
 ### Milestone 1 — Data Architecture and CLI Foundation
@@ -201,6 +230,14 @@ The principal analysis reference for fitted median diameter is the `D50` reconst
 
 The experimental-analysis layer provides dataset coverage, treatment-effect analysis, SSDI-specific diagnostics, and SSMD-specific diagnostics without modifying production model equations.
 
+### Milestone 6 — SSDI Field-Scale Upscaling and GUI MVP
+
+**Status: In progress — D50 desktop prototype assembled; scientific/technical closure pending.**
+
+Part 1 computes field-scale SSDI `D50` with the established Weber–Capillary model. Part 3 now includes a working PySide6 prototype. Part 2, exploratory shape/scale transfer for complete distributions, remains open and **does not block** the D50-only MVP.
+
+The current GUI is intentionally monolithic while features stabilize; incremental separation of widgets, orchestration and view state is planned in `docs/architecture/SSDI_GUI_REFACTORING_PLAN.md`. This is a maintenance priority, not a reason to alter validated scientific code.
+
 ## Current research boundary
 
 The stable distribution fitting problem is considered closed. Open distribution research remains separate and includes:
@@ -215,4 +252,6 @@ scale and gas transfer
 field-scale distribution reconstruction
 ```
 
-These topics are documented in `DISTRIBUTIONS_RESEARCH_GOALS_UPDATED.md` and should not modify the stable Rosin–Rammler fitting workflow without explicit scientific justification and validation.
+These topics are documented in `docs/research/DISTRIBUTIONS_RESEARCH_GOALS_UPDATED.md` and Part 2 of `docs/milestones/MILESTONE_06_SSDI_FIELD_SCALE_UPSCALING.md`. Do not modify the stable Rosin–Rammler fitting workflow without explicit scientific justification and validation.
+
+**Pause/resume reference:** `docs/checkpoints/CHECKPOINT_2026-10-19_SSDI_GUI_MVP.md`.
