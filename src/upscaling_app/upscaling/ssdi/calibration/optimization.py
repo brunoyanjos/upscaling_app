@@ -109,6 +109,12 @@ def optimize_coefficients(
         method="L-BFGS-B",
         jac=True,
         bounds=bounds,
+        options={
+            "ftol": 1e-14,
+            "gtol": 1e-11,
+            "maxiter": 5000,
+            "maxls": 60,
+        },
     )
 
     if not result.success:

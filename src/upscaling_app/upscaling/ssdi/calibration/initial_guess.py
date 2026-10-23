@@ -20,7 +20,9 @@ def evaluate_residual_value(
         b,
     )
 
-    error = jnp.mean(jnp.abs(d_pred - d_exp))
+    log_error = jnp.log(d_exp) - jnp.log(d_pred)
+
+    error = jnp.mean(log_error**2)
 
     valid = jnp.all(jnp.isfinite(d_pred) & (d_pred > 0.0))
 
